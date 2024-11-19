@@ -8,6 +8,7 @@ onTable = None
 arrF = []  
 
 def showFrame(nextF):
+    # REMEMBER TO ADD NEW FRAMES TO THIS LIST
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, medSupMenuF, medSupTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF]
 
     if not arrF or nextF != arrF[-1]:
@@ -72,8 +73,8 @@ def selectTable():
     showFrame(nextFrame) 
 
 def letterKeyRemover(medId):
-    num = ''.join(filter(str.isdigit, medId))  # Keep only digits
-    return int(num) if num else 0  # Return as an integer, default to 0 if no digits
+    num = ''.join(filter(str.isdigit, medId))  
+    return int(num) if num else 0 
 
 def navAddMed():
     showFrame(addMedicineF)
@@ -88,7 +89,7 @@ def showTableMed(sort_by="Name"):
         "MedType": "medType",
         "Quantity In Stock": "inStock"
     }
-    sort_column = sort_column_map.get(sort_by, "medId")  # Default to sorting by Name
+    sort_column = sort_column_map.get(sort_by, "medId")  
     
     try:
         cursor = connection.cursor()
@@ -123,17 +124,15 @@ def addNewMedicine():
         cursor.execute("SELECT MAX(medId) FROM medicines;")
         result = cursor.fetchone()
         if result[0]:
-            highest_numeric_id = letterKeyRemover(result[0])  # Extract numeric part
-            next_medId = highest_numeric_id + 1  # Increment by 1
+            highest_numeric_id = letterKeyRemover(result[0])  
+            next_medId = highest_numeric_id + 1 
         else:
-            next_medId = 1  # Default to 1 if no records exist
+            next_medId = 1  
 
-        # Step 2: Format medId with a prefix (e.g., 'A' + next_medId)
         new_medId = f"A{next_medId}"
 
-        # Step 2: Get user inputs
         name = nameInput.get().strip()
-        dosage = dosageInput.get().strip()  # Keep it as a string
+        dosage = dosageInput.get().strip()  
         expiry_date = expiryInput.get().strip()
         med_type = medTypeVar.get()
         in_stock = inStockInput.get().strip()
@@ -235,7 +234,6 @@ tk.Label(medTableF, text="Table Contents", font=("Arial", 24)).pack(pady=20)
 medTree = ttk.Treeview(medTableF, height=20)
 medTree.pack(padx=20, pady=20, fill="both", expand=True)
 
-# Dropdown for sorting
 medSortLabel = tk.Label(medTableF, text="Sort by:", font=("Arial", 14))
 medSortLabel.place(x=980, y=20, anchor="ne")  
 

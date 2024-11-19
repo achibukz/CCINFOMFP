@@ -39,11 +39,6 @@ def connectServer():
     except Exception as e:
         msg.showerror("Error", f"Unexpected error occurred: {e}")
 
-def letterKeyRemover(medId):
-    num = ''.join(filter(str.isdigit, medId))  # Keep only digits
-    return int(num) if num else 0  # Return as an integer, default to 0 if no digits
-
-
 def getTables():
     try:
         cursor = connection.cursor()
@@ -62,8 +57,23 @@ def selectTable():
         msg.showerror("Error", "Please select a table.")
         return
     onTable = tableDisplay.get(select)
-    showFrame(medMenuF) 
-    medTitleLabel.config(text=f"Table: {onTable}")
+
+    tableFrame = {
+        "medicines": medMenuF,
+        "customers": cusMenuF,
+        "doctors": docMenuF,
+        "medsup": medSupMenuF,
+        "prescriptions": presMenuF,
+        "sales": saleMenuF,
+        "suppliers": supMenuF,
+    }
+
+    nextFrame = tableFrame.get(onTable)
+    showFrame(nextFrame) 
+
+def letterKeyRemover(medId):
+    num = ''.join(filter(str.isdigit, medId))  # Keep only digits
+    return int(num) if num else 0  # Return as an integer, default to 0 if no digits
 
 def navAddMed():
     showFrame(addMedicineF)
@@ -209,8 +219,10 @@ tableDisplay.pack(pady=20)
 tk.Button(mainMenuF, text="Select Table", font=("Arial", 14), command=selectTable).pack(pady=10)
 tk.Button(mainMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
+
 # ================= Med Menu Frame =================
 medTitleLabel = tk.Label(medMenuF, text="", font=("Arial", 24))
+medTitleLabel.config(text=f"Table: Medicines")
 medTitleLabel.pack(pady=20)
 
 tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=showTableMed).pack(pady=10)
@@ -272,7 +284,61 @@ sortButton.place(x=1200, y=20, anchor="ne")  # Top-right button placement
 
 tk.Button(medTableF, text="Back to Table Menu", font=("Arial", 9), command=goBack).pack(pady=20)
 
-#------------------------------------------------------------------------#
+#----------------------CusMenu----------------------------------#
+
+cusMenuTitle = tk.Label(cusMenuF, text="", font=("Arial", 24))
+cusMenuTitle.config(text=f"Table: Customers")
+cusMenuTitle.pack(pady=20)
+
+#tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(cusMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#----------------------DocMenu----------------------------------#
+
+docMenuTitle = tk.Label(docMenuF, text="", font=("Arial", 24))
+docMenuTitle.config(text=f"Table: Doctors")
+docMenuTitle.pack(pady=20)
+
+#tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(docMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#----------------------MedSupMenu----------------------------------#
+
+medSupMenuTitle = tk.Label(medSupMenuF, text="", font=("Arial", 24))
+medSupMenuTitle.config(text=f"Table: Medicine Suppliers")
+medSupMenuTitle.pack(pady=20)
+
+#tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(medSupMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#----------------------PresMenu----------------------------------#
+
+presMenuTitle = tk.Label(presMenuF, text="", font=("Arial", 24))
+presMenuTitle.config(text=f"Table: Prescriptions")
+presMenuTitle.pack(pady=20)
+
+#tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(presMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#----------------------SaleMenu----------------------------------#
+
+saleMenuTitle = tk.Label(saleMenuF, text="", font=("Arial", 24))
+saleMenuTitle.config(text=f"Table: Sales")
+saleMenuTitle.pack(pady=20)
+
+#tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(saleMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#----------------------SupMenu----------------------------------#
+
+supMenuTitle = tk.Label(supMenuF, text="", font=("Arial", 24))
+supMenuTitle.config(text=f"Table: Suppliers")
+supMenuTitle.pack(pady=20)
+
+#tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(supMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#-------------------------------------------------------------#
 arrF.append(loginF)
 showFrame(loginF)
 

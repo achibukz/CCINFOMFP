@@ -72,8 +72,8 @@ def selectTable():
     nextFrame = tableFrame.get(onTable)
     showFrame(nextFrame) 
 
-def letterKeyRemover(medId):
-    num = ''.join(filter(str.isdigit, medId))  
+def letterKeyRemover(Id):
+    num = ''.join(filter(str.isdigit, Id))  
     return int(num) if num else 0 
 
 def navAddMed():

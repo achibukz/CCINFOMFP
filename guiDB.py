@@ -79,7 +79,7 @@ def letterKeyRemover(medId):
 def navAddMed():
     showFrame(addMedicineF)
 
-def showTableMed(sort_by="Name"):
+def showTableMed(sort_by="ID"):
 
     sort_column_map = {
         "ID": "medId",
@@ -117,6 +117,43 @@ def showTableMed(sort_by="Name"):
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch data: {e}")
+
+def showTableCus(sort_by="ID"):
+    sort_column_map = {
+        "ID": "customerId",
+        "Last Name": "customerLastName",
+        "First Name": "customerFirstName",
+        "Discount Card": "HasDisCard",
+    }
+    sort_column = sort_column_map.get(sort_by, "customerId")  
+    
+    try:
+        cursor = connection.cursor()
+        query = f"""
+            SELECT *
+            FROM {onTable}
+            ORDER BY {sort_column};
+        """
+        cursor.execute(query)
+        data = cursor.fetchall()
+
+        columns = [desc[0] for desc in cursor.description]
+        cusTree.delete(*cusTree.get_children()) 
+        cusTree["columns"] = columns
+        cusTree["show"] = "headings"
+
+        for col in columns:
+            cusTree.heading(col, text=col)
+            cusTree.column(col, width=200, anchor="center")
+
+        for row in data:
+            cusTree.insert("", tk.END, values=row)
+        
+        showFrame(cusTableF)
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch data: {e}")
+    
 
 def addNewMedicine():
     try:
@@ -242,6 +279,11 @@ medSortVar = tk.StringVar(value=medSort[0])
 medSortDrop = ttk.Combobox(medTableF, textvariable=medSortVar, values=medSort, state="readonly", font=("Arial", 14))
 medSortDrop.place(x=1080, y=20, anchor="ne")  
 
+sortButton = tk.Button(medTableF, text="Apply Sort", font=("Arial", 14), command=lambda: showTableMed(medSortVar.get()))
+sortButton.place(x=1200, y=20, anchor="ne")  # Top-right button placement
+
+tk.Button(medTableF, text="Back to Table Menu", font=("Arial", 9), command=goBack).pack(pady=20)
+
 # ============ Add Medicine ======================#
 addMedicineF = tk.Frame(root, width=1280, height=720)
 
@@ -275,21 +317,34 @@ priceInput.pack(pady=5)
 tk.Button(addMedicineF, text="Add Medicine", font=("Arial", 14), command=addNewMedicine).pack(pady=20)
 tk.Button(addMedicineF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
-#----------------------------------------------------------------#
-
-sortButton = tk.Button(medTableF, text="Apply Sort", font=("Arial", 14), command=lambda: showTableMed(medSortVar.get()))
-sortButton.place(x=1200, y=20, anchor="ne")  # Top-right button placement
-
-tk.Button(medTableF, text="Back to Table Menu", font=("Arial", 9), command=goBack).pack(pady=20)
-
 #----------------------CusMenu----------------------------------#
 
 cusMenuTitle = tk.Label(cusMenuF, text="", font=("Arial", 24))
 cusMenuTitle.config(text=f"Table: Customers")
 cusMenuTitle.pack(pady=20)
 
-#tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(cusMenuF, text="Show Table", font=("Arial", 14), command=showTableCus).pack(pady=10)
 tk.Button(cusMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#-----------------------CusTable---------------------------------#
+
+tk.Label(cusTableF, text="Table Contents", font=("Arial", 24)).pack(pady=20)
+
+cusTree = ttk.Treeview(cusTableF, height=20)
+cusTree.pack(padx=20, pady=20, fill="both", expand=True)
+
+cusSortLabel = tk.Label(cusTableF, text="Sort by:", font=("Arial", 14))
+cusSortLabel.place(x=980, y=20, anchor="ne")  
+
+cusSort = ["ID","Last Name", "First Name", "Discount Card"]
+cusSortVar = tk.StringVar(value=cusSort[0])
+cusSortDrop = ttk.Combobox(cusTableF, textvariable=cusSortVar, values=cusSort, state="readonly", font=("Arial", 14))
+cusSortDrop.place(x=1080, y=20, anchor="ne")  
+
+sortButton = tk.Button(cusTableF, text="Apply Sort", font=("Arial", 14), command=lambda: showTableCus(cusSortVar.get()))
+sortButton.place(x=1200, y=20, anchor="ne")  # Top-right button placement
+
+tk.Button(cusTableF, text="Back to Table Menu", font=("Arial", 9), command=goBack).pack(pady=20)
 
 #----------------------DocMenu----------------------------------#
 

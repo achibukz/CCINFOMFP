@@ -13,7 +13,8 @@ arrF = []
 def showFrame(nextF):
     # REMEMBER TO ADD NEW FRAMES TO THIS LIST
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
-             , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF]
+             , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF, inventoryReportF, createCustomerF, createDoctorF, createSupplierF
+             , updateCustomerF, updateSupplierF, updateDoctorF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -623,7 +624,6 @@ def displayInventoryReport():
     except sql.Error as e:
         msg.showerror("Error", f"Failed to generate inventory report: {e}")
 
-
 #----------------------------------------- CUSTOMER FUNCTIONS -----------------------------------------#
 
 def showTableCus(sort_by="ID"):
@@ -661,8 +661,404 @@ def showTableCus(sort_by="ID"):
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch data: {e}")
-    
-#---------------------------GUI SHIT-------------------------------------------#
+
+def getCustomers():
+    try:
+        cursor = connection.cursor()
+        query = "SELECT customerID, CONCAT(customerFirstName, ' ', customerLastName) AS fullName FROM customers;"
+        cursor.execute(query)
+        customers = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]
+        updateCustomerVar.set("")  # Reset selection
+        customerDropdown["values"] = customers
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch customers: {e}")
+
+def navupdateCustomer():
+    if connection is None:  
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+    getCustomers()  
+    showFrame(updateCustomerF)
+
+def navCreateCustomer():
+    showFrame(createCustomerF)
+
+def createCustomer():
+    try:
+        last_name = customerLastNameInput.get().strip()
+        first_name = customerFirstNameInput.get().strip()
+        discount_card = hasDiscountCardVar.get()
+
+        if not last_name or not first_name:
+            msg.showerror("Error", "Both First Name and Last Name are required.")
+            return
+
+        if len(last_name) > 50 or len(first_name) > 50:
+            msg.showerror("Error", "First Name and Last Name must not exceed 50 characters.")
+            return
+
+        if discount_card not in [0, 1]:
+            msg.showerror("Error", "Discount Card status must be either 0 (No) or 1 (Yes).")
+            return
+
+        cursor = connection.cursor()
+        check_query = """
+            SELECT COUNT(*) 
+            FROM customers 
+            WHERE customerLastName = %s AND customerFirstName = %s;
+        """
+        cursor.execute(check_query, (last_name, first_name))
+        exists = cursor.fetchone()[0]
+
+        if exists > 0:
+            msg.showerror("Error", f"Customer '{first_name} {last_name}' already exists.")
+            return
+
+        cursor.execute("SELECT MAX(customerID) FROM customers;")
+        result = cursor.fetchone()
+        numCustomerID = letterKeyRemover(result[0]) + 1 if result[0] else 1
+        new_customerID = f"C{numCustomerID:04d}"
+
+        query = """
+            INSERT INTO customers (customerID, customerLastName, customerFirstName, HasDisCard)
+            VALUES (%s, %s, %s, %s);
+        """
+        cursor.execute(query, (new_customerID, last_name, first_name, discount_card))
+        connection.commit()
+
+        msg.showinfo("Success", f"Customer '{first_name} {last_name}' created with ID: {new_customerID}")
+
+        customerLastNameInput.delete(0, tk.END)
+        customerFirstNameInput.delete(0, tk.END)
+        hasDiscountCardVar.set(0)
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to create customer: {e}")
+    except Exception as e:
+        msg.showerror("Error", f"Unexpected error: {e}")
+
+def updateCustomer():
+    selected_customer = updateCustomerVar.get()
+    if not selected_customer:
+        msg.showerror("Error", "Please select a customer to update.")
+        return
+
+    customerID = selected_customer.split(" - ")[0]
+    last_name = updateCustomerLastNameInput.get().strip()
+    first_name = updateCustomerFirstNameInput.get().strip()
+    discount_card = updateCustomerDiscountInput.get().strip()
+
+    updates = []
+    params = []
+
+    if last_name != "NA":
+        if len(last_name) > 50:
+            msg.showerror("Error", "Last Name must not exceed 50 characters.")
+            return
+        updates.append("customerLastName = %s")
+        params.append(last_name)
+
+    if first_name != "NA":
+        if len(first_name) > 50:
+            msg.showerror("Error", "First Name must not exceed 50 characters.")
+            return
+        updates.append("customerFirstName = %s")
+        params.append(first_name)
+
+    if discount_card != "NA":
+        if discount_card not in ["0", "1"]:
+            msg.showerror("Error", "Discount Card must be 0 (No) or 1 (Yes).")
+            return
+        updates.append("HasDisCard = %s")
+        params.append(int(discount_card))
+
+    if not updates:
+        msg.showerror("Error", "No valid fields to update.")
+        return
+
+    try:
+        if "customerLastName = %s" in updates and "customerFirstName = %s" in updates:
+            cursor = connection.cursor()
+            check_query = """
+                SELECT COUNT(*) 
+                FROM customers 
+                WHERE customerLastName = %s AND customerFirstName = %s AND customerID != %s;
+            """
+            cursor.execute(check_query, (last_name, first_name, customerID))
+            if cursor.fetchone()[0] > 0:
+                msg.showerror("Error", "A customer with the same name already exists.")
+                return
+
+        params.append(customerID)
+        cursor = connection.cursor()
+        query = f"UPDATE customers SET {', '.join(updates)} WHERE customerID = %s;"
+        cursor.execute(query, tuple(params))
+        connection.commit()
+        msg.showinfo("Success", "Customer updated successfully.")
+        getCustomers()  # Refresh dropdown
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to update customer: {e}")
+
+
+
+
+#----------------------------------------- DOCTOR FUNCTIONS -----------------------------------------#
+def navCreateDoctor():
+    showFrame(createDoctorF)
+
+def navUpdateDoctor():
+    if connection is None:  
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+    getDoctors()  
+    showFrame(updateDoctorF)
+
+def getDoctors():
+    try:
+        cursor = connection.cursor()
+        query = "SELECT docID, CONCAT(doctorFirstName, ' ', doctorLastName) AS fullName FROM doctors;"
+        cursor.execute(query)
+        doctors = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]
+        updateDoctorVar.set("")  # Reset selection
+        doctorDropdown["values"] = doctors
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch doctors: {e}")
+
+def createDoctor():
+    try:
+        last_name = doctorLastNameInput.get().strip()
+        first_name = doctorFirstNameInput.get().strip()
+
+        if not last_name or not first_name:
+            msg.showerror("Error", "Both First Name and Last Name are required.")
+            return
+
+        if len(last_name) > 50 or len(first_name) > 50:
+            msg.showerror("Error", "First Name and Last Name must not exceed 50 characters.")
+            return
+
+        cursor = connection.cursor()
+        check_query = """
+            SELECT COUNT(*) 
+            FROM doctors 
+            WHERE doctorLastName = %s AND doctorFirstName = %s;
+        """
+        cursor.execute(check_query, (last_name, first_name))
+        exists = cursor.fetchone()[0]
+
+        if exists > 0:
+            msg.showerror("Error", f"Doctor '{first_name} {last_name}' already exists.")
+            return
+
+        cursor.execute("SELECT MAX(docID) FROM doctors;")
+        result = cursor.fetchone()
+        numDocID = letterKeyRemover(result[0]) + 1 if result[0] else 1
+        new_docID = f"D{numDocID:04d}"
+
+        query = """
+            INSERT INTO doctors (docID, doctorLastName, doctorFirstName)
+            VALUES (%s, %s, %s);
+        """
+        cursor.execute(query, (new_docID, last_name, first_name))
+        connection.commit()
+
+        msg.showinfo("Success", f"Doctor '{first_name} {last_name}' created with ID: {new_docID}")
+
+        doctorLastNameInput.delete(0, tk.END)
+        doctorFirstNameInput.delete(0, tk.END)
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to create doctor: {e}")
+    except Exception as e:
+        msg.showerror("Error", f"Unexpected error: {e}")
+
+def updateDoctor():
+    selected_doctor = updateDoctorVar.get()
+    if not selected_doctor:
+        msg.showerror("Error", "Please select a doctor to update.")
+        return
+
+    docID = selected_doctor.split(" - ")[0]
+    last_name = updateDoctorLastNameInput.get().strip()
+    first_name = updateDoctorFirstNameInput.get().strip()
+
+    updates = []
+    params = []
+
+    if last_name != "NA":
+        if len(last_name) > 50:
+            msg.showerror("Error", "Last Name must not exceed 50 characters.")
+            return
+        updates.append("doctorLastName = %s")
+        params.append(last_name)
+
+    if first_name != "NA":
+        if len(first_name) > 50:
+            msg.showerror("Error", "First Name must not exceed 50 characters.")
+            return
+        updates.append("doctorFirstName = %s")
+        params.append(first_name)
+
+    if not updates:
+        msg.showerror("Error", "No valid fields to update.")
+        return
+
+    try:
+        if "doctorLastName = %s" in updates and "doctorFirstName = %s" in updates:
+            cursor = connection.cursor()
+            check_query = """
+                SELECT COUNT(*) 
+                FROM doctors 
+                WHERE doctorLastName = %s AND doctorFirstName = %s AND docID != %s;
+            """
+            cursor.execute(check_query, (last_name, first_name, docID))
+            if cursor.fetchone()[0] > 0:
+                msg.showerror("Error", "A doctor with the same name already exists.")
+                return
+
+        params.append(docID)
+        cursor = connection.cursor()
+        query = f"UPDATE doctors SET {', '.join(updates)} WHERE docID = %s;"
+        cursor.execute(query, tuple(params))
+        connection.commit()
+        msg.showinfo("Success", "Doctor updated successfully.")
+        getDoctors()  # Refresh dropdown
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to update doctor: {e}")
+
+#----------------------------------------- SUPPLIER FUNCTIONS -----------------------------------------#
+def navCreateSupplier():
+    showFrame(createSupplierF)
+
+def navUpdateSupplier():
+    if connection is None:  
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+    getSuppliers()  
+    showFrame(updateSupplierF)
+
+def getSuppliers():
+    try:
+        cursor = connection.cursor()
+        query = "SELECT supID, supName FROM suppliers;"
+        cursor.execute(query)
+        suppliers = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]
+        updateSupplierVar.set("")  # Reset selection
+        supplierDropdown["values"] = suppliers
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch suppliers: {e}")
+
+def createSupplier():
+    try:
+        supplier_name = supplierNameInput.get().strip()
+        contact = contactInput.get().strip()
+
+        if not supplier_name or not contact:
+            msg.showerror("Error", "Both Supplier Name and Contact are required.")
+            return
+
+        if len(supplier_name) > 100:
+            msg.showerror("Error", "Supplier Name must not exceed 100 characters.")
+            return
+
+        if len(contact) > 50:
+            msg.showerror("Error", "Contact must not exceed 50 characters.")
+            return
+
+        cursor = connection.cursor()
+        check_query = """
+            SELECT COUNT(*) 
+            FROM suppliers 
+            WHERE supName = %s;
+        """
+        cursor.execute(check_query, (supplier_name,))
+        exists = cursor.fetchone()[0]
+
+        if exists > 0:
+            msg.showerror("Error", f"Supplier '{supplier_name}' already exists.")
+            return
+
+        cursor.execute("SELECT MAX(supID) FROM suppliers;")
+        result = cursor.fetchone()
+        numSupID = letterKeyRemover(result[0]) + 1 if result[0] else 1
+        new_supID = f"B{numSupID:04d}"
+
+        query = """
+            INSERT INTO suppliers (supID, supName, contact)
+            VALUES (%s, %s, %s);
+        """
+        cursor.execute(query, (new_supID, supplier_name, contact))
+        connection.commit()
+
+        msg.showinfo("Success", f"Supplier '{supplier_name}' created with ID: {new_supID}")
+
+        supplierNameInput.delete(0, tk.END)
+        contactInput.delete(0, tk.END)
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to create supplier: {e}")
+    except Exception as e:
+        msg.showerror("Error", f"Unexpected error: {e}")
+
+def updateSupplier():
+    selected_supplier = updateSupplierVar.get()
+    if not selected_supplier:
+        msg.showerror("Error", "Please select a supplier to update.")
+        return
+
+    supID = selected_supplier.split(" - ")[0]
+    supplier_name = updateSupplierNameInput.get().strip()
+    contact = updateSupplierContactInput.get().strip()
+
+    updates = []
+    params = []
+
+    if supplier_name != "NA":
+        if len(supplier_name) > 100:
+            msg.showerror("Error", "Supplier Name must not exceed 100 characters.")
+            return
+        updates.append("supName = %s")
+        params.append(supplier_name)
+
+    if contact != "NA":
+        if len(contact) > 50:
+            msg.showerror("Error", "Contact must not exceed 50 characters.")
+            return
+        updates.append("contact = %s")
+        params.append(contact)
+
+    if not updates:
+        msg.showerror("Error", "No valid fields to update.")
+        return
+
+    try:
+        if "supName = %s" in updates:
+            cursor = connection.cursor()
+            check_query = """
+                SELECT COUNT(*) 
+                FROM suppliers 
+                WHERE supName = %s AND supID != %s;
+            """
+            cursor.execute(check_query, (supplier_name, supID))
+            if cursor.fetchone()[0] > 0:
+                msg.showerror("Error", "A supplier with the same name already exists.")
+                return
+
+        params.append(supID)
+        cursor = connection.cursor()
+        query = f"UPDATE suppliers SET {', '.join(updates)} WHERE supID = %s;"
+        cursor.execute(query, tuple(params))
+        connection.commit()
+        msg.showinfo("Success", "Supplier updated successfully.")
+        getSuppliers() 
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to update supplier: {e}")
+
+#----------------------------------------- PRESCRIPTION FUNCTIONS -----------------------------------------#
+
+#----------------------------------------- SALE FUNCTIONS -----------------------------------------#
+
+#---------------------------GUI-------------------------------------------#
 # Main Application
 root = tk.Tk()
 root.title("Pharmacy DBMS")
@@ -932,11 +1328,6 @@ reportTree.heading("Supplier", text="Supplier Name")
 tk.Button(inventoryReportF, text="Generate Report", font=("Arial", 14), command=displayInventoryReport).pack(pady=10)
 tk.Button(inventoryReportF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
-
-
-
-
-
 #----------------------CusMenu----------------------------------#
 
 cusMenuTitle = tk.Label(cusMenuF, text="", font=("Arial", 24))
@@ -944,6 +1335,11 @@ cusMenuTitle.config(text=f"Table: Customers")
 cusMenuTitle.pack(pady=20)
 
 tk.Button(cusMenuF, text="Show Table", font=("Arial", 14), command=showTableCus).pack(pady=10)
+tk.Button(cusMenuF, text="Add New Customer", font=("Arial", 14), command=navCreateCustomer).pack(pady=10)
+tk.Button(cusMenuF, text="Update Customer", font=("Arial", 14), command=navupdateCustomer).pack(pady=10)
+#tk.Button(cusMenuF, text="Delete Customer", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+
+
 tk.Button(cusMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
 #-----------------------CusTable---------------------------------#
@@ -966,6 +1362,65 @@ sortButton.place(x=1200, y=20, anchor="ne")  # Top-right button placement
 
 tk.Button(cusTableF, text="Back to Table Menu", font=("Arial", 9), command=goBack).pack(pady=20)
 
+#----------------------CreateCustomer----------------------------------#
+# Frame for Create Customer
+createCustomerF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(createCustomerF, text="Create New Customer", font=("Arial", 24)).pack(pady=20)
+
+# Last Name Input
+tk.Label(createCustomerF, text="Last Name:", font=("Arial", 14)).pack(pady=5)
+customerLastNameInput = tk.Entry(createCustomerF, font=("Arial", 14), width=40)
+customerLastNameInput.pack(pady=5)
+
+# First Name Input
+tk.Label(createCustomerF, text="First Name:", font=("Arial", 14)).pack(pady=5)
+customerFirstNameInput = tk.Entry(createCustomerF, font=("Arial", 14), width=40)
+customerFirstNameInput.pack(pady=5)
+
+# Discount Card Status
+tk.Label(createCustomerF, text="Has Discount Card (0 = No, 1 = Yes):", font=("Arial", 14)).pack(pady=5)
+hasDiscountCardVar = tk.IntVar(value=0)
+tk.Radiobutton(createCustomerF, text="No", variable=hasDiscountCardVar, value=0, font=("Arial", 12)).pack()
+tk.Radiobutton(createCustomerF, text="Yes", variable=hasDiscountCardVar, value=1, font=("Arial", 12)).pack()
+
+# Buttons
+tk.Button(createCustomerF, text="Create Customer", font=("Arial", 14), command=createCustomer).pack(pady=20)
+tk.Button(createCustomerF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+#----------------------UpdateCus----------------------------------#
+# Frame for Update Customer
+updateCustomerF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(updateCustomerF, text="Update Customer", font=("Arial", 24)).pack(pady=20)
+
+# Dropdown for Customer Selection
+tk.Label(updateCustomerF, text="Select Customer:", font=("Arial", 14)).pack(pady=5)
+updateCustomerVar = tk.StringVar()
+customerDropdown = ttk.Combobox(updateCustomerF, textvariable=updateCustomerVar, state="readonly", font=("Arial", 14), width=50)
+customerDropdown.pack(pady=5)
+
+# Input Fields for Updating
+tk.Label(updateCustomerF, text="Last Name (or NA):", font=("Arial", 14)).pack(pady=5)
+updateCustomerLastNameInput = tk.Entry(updateCustomerF, font=("Arial", 14), width=40)
+updateCustomerLastNameInput.pack(pady=5)
+
+tk.Label(updateCustomerF, text="First Name (or NA):", font=("Arial", 14)).pack(pady=5)
+updateCustomerFirstNameInput = tk.Entry(updateCustomerF, font=("Arial", 14), width=40)
+updateCustomerFirstNameInput.pack(pady=5)
+
+tk.Label(updateCustomerF, text="Has Discount Card (0 = No, 1 = Yes, or NA):", font=("Arial", 14)).pack(pady=5)
+updateCustomerDiscountInput = tk.Entry(updateCustomerF, font=("Arial", 14), width=40)
+updateCustomerDiscountInput.pack(pady=5)
+
+# Buttons
+tk.Button(updateCustomerF, text="Update Customer", font=("Arial", 14), command=lambda: updateCustomer()).pack(pady=20)
+tk.Button(updateCustomerF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+
+
 #----------------------DocMenu----------------------------------#
 
 docMenuTitle = tk.Label(docMenuF, text="", font=("Arial", 24))
@@ -973,7 +1428,59 @@ docMenuTitle.config(text=f"Table: Doctors")
 docMenuTitle.pack(pady=20)
 
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(docMenuF, text="Add New Doctor", font=("Arial", 14), command=navCreateDoctor).pack(pady=10)
+tk.Button(docMenuF, text="Update Doctor", font=("Arial", 14), command=navUpdateDoctor).pack(pady=10)
+
 tk.Button(docMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#----------------------CreateDoc----------------------------------#
+# Frame for Create Doctor
+createDoctorF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(createDoctorF, text="Create New Doctor", font=("Arial", 24)).pack(pady=20)
+
+# Last Name Input
+tk.Label(createDoctorF, text="Last Name:", font=("Arial", 14)).pack(pady=5)
+doctorLastNameInput = tk.Entry(createDoctorF, font=("Arial", 14), width=40)
+doctorLastNameInput.pack(pady=5)
+
+# First Name Input
+tk.Label(createDoctorF, text="First Name:", font=("Arial", 14)).pack(pady=5)
+doctorFirstNameInput = tk.Entry(createDoctorF, font=("Arial", 14), width=40)
+doctorFirstNameInput.pack(pady=5)
+
+# Buttons
+tk.Button(createDoctorF, text="Create Doctor", font=("Arial", 14), command=createDoctor).pack(pady=20)
+tk.Button(createDoctorF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+#----------------------UpdateDoc----------------------------------#
+# Frame for Update Doctor
+updateDoctorF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(updateDoctorF, text="Update Doctor", font=("Arial", 24)).pack(pady=20)
+
+# Dropdown for Doctor Selection
+tk.Label(updateDoctorF, text="Select Doctor:", font=("Arial", 14)).pack(pady=5)
+updateDoctorVar = tk.StringVar()
+doctorDropdown = ttk.Combobox(updateDoctorF, textvariable=updateDoctorVar, state="readonly", font=("Arial", 14), width=50)
+doctorDropdown.pack(pady=5)
+
+# Input Fields for Updating
+tk.Label(updateDoctorF, text="Last Name (or NA):", font=("Arial", 14)).pack(pady=5)
+updateDoctorLastNameInput = tk.Entry(updateDoctorF, font=("Arial", 14), width=40)
+updateDoctorLastNameInput.pack(pady=5)
+
+tk.Label(updateDoctorF, text="First Name (or NA):", font=("Arial", 14)).pack(pady=5)
+updateDoctorFirstNameInput = tk.Entry(updateDoctorF, font=("Arial", 14), width=40)
+updateDoctorFirstNameInput.pack(pady=5)
+
+# Buttons
+tk.Button(updateDoctorF, text="Update Doctor", font=("Arial", 14), command=lambda: updateDoctor()).pack(pady=20)
+tk.Button(updateDoctorF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+
 
 #----------------------PresMenu----------------------------------#
 
@@ -1000,7 +1507,58 @@ supMenuTitle.config(text=f"Table: Suppliers")
 supMenuTitle.pack(pady=20)
 
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(supMenuF, text="Add New Supplier", font=("Arial", 14), command=navCreateSupplier).pack(pady=10)
+tk.Button(supMenuF, text="Update Supplier", font=("Arial", 14), command=navUpdateSupplier).pack(pady=10)
+
+
 tk.Button(supMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+#----------------------CreateSup----------------------------------#
+# Frame for Create Supplier
+createSupplierF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(createSupplierF, text="Create New Supplier", font=("Arial", 24)).pack(pady=20)
+
+# Supplier Name Input
+tk.Label(createSupplierF, text="Supplier Name:", font=("Arial", 14)).pack(pady=5)
+supplierNameInput = tk.Entry(createSupplierF, font=("Arial", 14), width=40)
+supplierNameInput.pack(pady=5)
+
+# Contact Input
+tk.Label(createSupplierF, text="Contact (Required):", font=("Arial", 14)).pack(pady=5)
+contactInput = tk.Entry(createSupplierF, font=("Arial", 14), width=40)
+contactInput.pack(pady=5)
+
+# Buttons
+tk.Button(createSupplierF, text="Create Supplier", font=("Arial", 14), command=createSupplier).pack(pady=20)
+tk.Button(createSupplierF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+#----------------------UpdateSup----------------------------------#
+# Frame for Update Supplier
+updateSupplierF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(updateSupplierF, text="Update Supplier", font=("Arial", 24)).pack(pady=20)
+
+# Dropdown for Supplier Selection
+tk.Label(updateSupplierF, text="Select Supplier:", font=("Arial", 14)).pack(pady=5)
+updateSupplierVar = tk.StringVar()
+supplierDropdown = ttk.Combobox(updateSupplierF, textvariable=updateSupplierVar, state="readonly", font=("Arial", 14), width=50)
+supplierDropdown.pack(pady=5)
+
+# Input Fields for Updating
+tk.Label(updateSupplierF, text="Supplier Name (or NA):", font=("Arial", 14)).pack(pady=5)
+updateSupplierNameInput = tk.Entry(updateSupplierF, font=("Arial", 14), width=40)
+updateSupplierNameInput.pack(pady=5)
+
+tk.Label(updateSupplierF, text="Contact (or NA):", font=("Arial", 14)).pack(pady=5)
+updateSupplierContactInput = tk.Entry(updateSupplierF, font=("Arial", 14), width=40)
+updateSupplierContactInput.pack(pady=5)
+
+# Buttons
+tk.Button(updateSupplierF, text="Update Supplier", font=("Arial", 14), command=lambda: updateSupplier()).pack(pady=20)
+tk.Button(updateSupplierF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
 #-------------------------------------------------------------#
 arrF.append(loginF)

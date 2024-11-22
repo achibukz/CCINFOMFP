@@ -3,6 +3,14 @@
 INSERT INTO suppliers (supplierId, name, contact)
 VALUES ('%s', '%s', '%s');
 
+-- no supplier ID as it is automatically created
+
+INSERT INTO suppliers (name)
+VALUES ('%s');
+
+INSERT INTO suppliers (contact)
+VALUES ('%s');
+
 -- Reading the supplier record to check if the supplier provides a specific type of medicine
 SELECT s.supplierId, s.name, s.contact
 FROM suppliers s
@@ -28,6 +36,7 @@ SELECT
     s.name AS "Supplier Name",
     s.contact AS "Contact",
     GROUP_CONCAT(m.name SEPARATOR ', ') AS "Medicines Supplied"
+    GROUP_CONCAT(ms.dateOfPurch SEPARATOR ', ') AS "Date of Purchase"
 FROM suppliers s
 JOIN medSup ms ON s.supplierId = ms.supplierId
 JOIN medicines m ON ms.medId = m.medId

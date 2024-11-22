@@ -14,7 +14,7 @@ def showFrame(nextF):
     # REMEMBER TO ADD NEW FRAMES TO THIS LIST
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
              , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF, inventoryReportF, createCustomerF, createDoctorF, createSupplierF
-             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF]
+             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -81,79 +81,6 @@ def letterKeyRemover(Id):
     num = ''.join(filter(str.isdigit, Id))  
     return int(num) if num else 0 
 
-def navAddMed():
-    if connection is None:  # Ensure a connection exists before fetching suppliers
-        msg.showerror("Error", "Please connect to the database first.")
-        return
-    getSuppliers()  # Populate the supplier dropdown
-    showFrame(addMedicineF)  # Navigate to Add Medicine frame
-
-def navUpdateMed():
-    if connection is None:  
-        msg.showerror("Error", "Please connect to the database first.")
-        return
-    getMedName()  
-    showFrame(updateMedicineF)
-
-def navDeleteMedicine():
-    getDeletableMed()
-    showFrame(deleteMedicineF)
-
-def navLowStock():
-    displayLowStock()
-    showFrame(lowStockF)
-
-def navExpirationDates():
-    displayExpirationDates()
-    showFrame(expirationDatesF)
-
-def navInventoryReport():
-    showFrame(inventoryReportF)
-
-def getSuppliers():
-    try:
-        cursor = connection.cursor()
-        query = "SELECT supID, supName FROM suppliers;"
-        cursor.execute(query)
-        suppliers = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]  # Combine ID and name for clarity
-        supplierVar.set("")  # Reset the combobox selection
-        supplierDropdown["values"] = suppliers  # Populate the dropdown
-    except sql.Error as e:
-        msg.showerror("Error", f"Failed to fetch suppliers: {e}")
-
-def getMedName():
-    try:
-        cursor = connection.cursor()
-        query = """
-            SELECT m.medName, s.dosage
-            FROM medicines m
-            JOIN medSup s ON m.medID = s.medID;
-        """
-        cursor.execute(query)
-        medData = cursor.fetchall()
-        medicine_dropdown_values = [f"{row[0]} - {row[1]}" for row in medData]  
-        medicineIDDropdown["values"] = medicine_dropdown_values  
-    except sql.Error as e:
-        msg.showerror("Error", f"Failed to fetch medicine names and dosages: {e}")
-
-def getDeletableMed():
-    try:
-        cursor = connection.cursor()
-        query = "SELECT m.medID, m.medName, ms.dosage FROM medicines m JOIN medSup ms ON m.medID = ms.medID;"
-        cursor.execute(query)
-        medicines = cursor.fetchall()
-
-        deletable_medicines = []
-        for medID, medName, dosage in medicines:
-            if not checkIDExists(medID):  # Only include medicines not referenced in other tables
-                deletable_medicines.append(f"{medName} - {dosage}")
-
-        deletableMedicineDropdown["values"] = deletable_medicines
-        deletableMedicineVar.set("")  # Reset selection
-
-    except sql.Error as e:
-        msg.showerror("Error", f"Failed to fetch deletable medicines: {e}")
-
 def checkIDExists(id):
     try:
         cursor = connection.cursor()
@@ -219,8 +146,107 @@ def getDeletableIDs(table_name, id_prefix):
         msg.showerror("Error", f"Failed to fetch deletable IDs: {e}")
         return []
 
-
 #----------------------------------------- MEDICINE FUNCTIONS -----------------------------------------#
+def navAddMed():
+    if connection is None:  # Ensure a connection exists before fetching suppliers
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+
+    suppliers = getSuppliersNON()  # Fetch suppliers from the database
+    if suppliers:
+        supplierDropdownMed["values"] = suppliers  # Set values in the dropdown
+        supplierVarMed.set("")  # Clear current selection
+
+    showFrame(addMedicineF)  # Navigate to Add Medicine frame
+
+def navUpdateMed():
+    if connection is None:  
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+    getMedName()  
+    showFrame(updateMedicineF)
+
+def navDeleteMedicine():
+    getDeletableMed()
+    showFrame(deleteMedicineF)
+
+def navLowStock():
+    displayLowStock()
+    showFrame(lowStockF)
+
+def navExpirationDates():
+    displayExpirationDates()
+    showFrame(expirationDatesF)
+
+def navInventoryReport():
+    showFrame(inventoryReportF)
+
+def getSuppliersNON():
+    try:
+        cursor = connection.cursor()
+        query = "SELECT supID, supName FROM suppliers;"
+        cursor.execute(query)
+        suppliers = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]  # Combine ID and name for clarity
+
+        if not suppliers:
+            msg.showinfo("Info", "No suppliers found in the database.")  # Inform if no suppliers exist
+
+        return suppliers  # Return the fetched suppliers
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch suppliers: {e}")
+        return []
+
+
+def getMedName():
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT m.medName, s.dosage
+            FROM medicines m
+            JOIN medSup s ON m.medID = s.medID;
+        """
+        cursor.execute(query)
+        medData = cursor.fetchall()
+        medicine_dropdown_values = [f"{row[0]} - {row[1]}" for row in medData]  
+        medicineIDDropdown["values"] = medicine_dropdown_values  
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch medicine names and dosages: {e}")
+
+def getDeletableMed():
+    try:
+        cursor = connection.cursor()
+        query = "SELECT m.medID, m.medName, ms.dosage FROM medicines m JOIN medSup ms ON m.medID = ms.medID;"
+        cursor.execute(query)
+        medicines = cursor.fetchall()
+
+        deletable_medicines = []
+        for medID, medName, dosage in medicines:
+            if not checkIDExists(medID):  # Only include medicines not referenced in other tables
+                deletable_medicines.append(f"{medName} - {dosage}")
+
+        deletableMedicineDropdown["values"] = deletable_medicines
+        deletableMedicineVar.set("")  # Reset selection
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch deletable medicines: {e}")
+
+def getPrescMeds(dropdown_var):
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT m.medID, m.medName, ms.dosage
+            FROM medicines AS m
+            JOIN medSup AS ms ON m.medID = ms.medID
+            WHERE m.medType = 'Prescription';
+        """
+        cursor.execute(query)
+        medicines = [f"{row[0]} - {row[1]} - {row[2]}" for row in cursor.fetchall()]  # Format: Med Name - Dosage
+
+        dropdown_var.set("")  # Reset selection
+        return medicines
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch prescription-only medicines: {e}")
+        return []
 
 def showTableMed(sort_by="ID"):
 
@@ -267,7 +293,7 @@ def addNewMedicine():
         name = nameInput.get().strip()
         med_type = medTypeVar.get().strip()
         price = priceInput.get().strip()
-        supplier = supplierVar.get().strip()
+        supplier = supplierVarMed.get().strip()
         dosage = dosageInput.get().strip()
         expiry_date = expiryInput.get().strip()
         stock_bought = inStockInput.get().strip()
@@ -681,16 +707,28 @@ def showTableCus(sort_by="ID"):
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch data: {e}")
 
-def getCustomers():
+def getCustomersNON():
     try:
         cursor = connection.cursor()
         query = "SELECT customerID, CONCAT(customerFirstName, ' ', customerLastName) AS fullName FROM customers;"
         cursor.execute(query)
         customers = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]
         updateCustomerVar.set("")  # Reset selection
-        customerDropdown["values"] = customers
+        customerDropdownNON["values"] = customers
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch customers: {e}")
+
+def getCustomers(dropdown_var):
+    try:
+        cursor = connection.cursor()
+        query = "SELECT customerID, CONCAT(customerFirstName, ' ', customerLastName) AS fullName FROM customers;"
+        cursor.execute(query)
+        customers = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]
+        dropdown_var.set("")  # Reset selection
+        return customers
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch customers: {e}")
+        return []
 
 def getDeletableCustomers():
     deletable_customers = getDeletableIDs("customers", "customerID")
@@ -705,7 +743,7 @@ def navupdateCustomer():
     if connection is None:  
         msg.showerror("Error", "Please connect to the database first.")
         return
-    getCustomers()  
+    getCustomersNON()  
     showFrame(updateCustomerF)
 
 def navCreateCustomer():
@@ -823,7 +861,7 @@ def updateCustomer():
         cursor.execute(query, tuple(params))
         connection.commit()
         msg.showinfo("Success", "Customer updated successfully.")
-        getCustomers()  # Refresh dropdown
+        getCustomersNON()  # Refresh dropdown
     except sql.Error as e:
         msg.showerror("Error", f"Failed to update customer: {e}")
 
@@ -863,23 +901,35 @@ def navUpdateDoctor():
     if connection is None:  
         msg.showerror("Error", "Please connect to the database first.")
         return
-    getDoctors()  
+    getDoctorsNON()  
     showFrame(updateDoctorF)
 
 def navDeleteDoctor():
     getDeletableDoctors()
     showFrame(deleteDoctorF)
 
-def getDoctors():
+def getDoctorsNON():
     try:
         cursor = connection.cursor()
         query = "SELECT docID, CONCAT(doctorFirstName, ' ', doctorLastName) AS fullName FROM doctors;"
         cursor.execute(query)
         doctors = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]
         updateDoctorVar.set("")  # Reset selection
-        doctorDropdown["values"] = doctors
+        doctorDropdownNON["values"] = doctors
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch doctors: {e}")
+
+def getDoctors(dropdown_var):
+    try:
+        cursor = connection.cursor()
+        query = "SELECT docID, CONCAT(doctorFirstName, ' ', doctorLastName) AS fullName FROM doctors;"
+        cursor.execute(query)
+        doctors = [f"{row[0]} - {row[1]}" for row in cursor.fetchall()]
+        dropdown_var.set("")  # Reset selection
+        return doctors
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch doctors: {e}")
+        return []
 
 def getDeletableDoctors():
     deletable_doctors = getDeletableIDs("doctors", "docID")
@@ -984,7 +1034,7 @@ def updateDoctor():
         cursor.execute(query, tuple(params))
         connection.commit()
         msg.showinfo("Success", "Doctor updated successfully.")
-        getDoctors()  # Refresh dropdown
+        getDoctorsNON()  # Refresh dropdown
     except sql.Error as e:
         msg.showerror("Error", f"Failed to update doctor: {e}")
 
@@ -1192,6 +1242,153 @@ def deleteSupplier():
         msg.showerror("Error", f"Failed to delete supplier: {e}")
 
 #----------------------------------------- PRESCRIPTION FUNCTIONS -----------------------------------------#
+def navAddPrescription():
+    customerDropdown["values"] = getCustomers(customerVar)
+    doctorDropdown["values"] = getDoctors(doctorVar)
+    prescriptionMedDropdown["values"] = getPrescMeds(prescriptionMedVar)
+
+    # Show the Add Prescription frame
+    showFrame(addPrescriptionF)
+
+def navUpdatePrescription():
+    if connection is None:
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+
+    prescSelectionDropdown["values"] = getPrescriptionsForUpdate(prescSelectionVar)
+    newPrescMedDropdown["values"] = getPrescMeds(newPrescMedVar)
+    newDoctorDropdown["values"] = getDoctors(newDoctorVar)
+
+    showFrame(updatePrescriptionF)
+
+def getPrescriptionsForUpdate(var):
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT p.presID, c.customerID, c.customerLastName, c.customerFirstName 
+            FROM prescriptions p
+            JOIN customers c ON p.customerID = c.customerID;
+        """
+        cursor.execute(query)
+        prescriptions = [
+            f"{row[0]} - {row[2]} {row[3]} ({row[1]})" for row in cursor.fetchall()
+        ]
+        var.set("")  # Reset dropdown selection
+        return prescriptions
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch prescriptions: {e}")
+        return []
+
+def addNewPrescription():
+    customer_selection = customerVar.get()
+    medicine_selection = prescriptionMedVar.get()
+    doctor_selection = doctorVar.get()
+
+    if not all([customer_selection, medicine_selection, doctor_selection]):
+        msg.showerror("Error", "All fields must be selected.")
+        return
+
+    customerID = customer_selection.split(" - ")[0]
+    medicine = medicine_selection.split(" - ")
+    medName, dosage = medicine[0], medicine[1]
+    docID = doctor_selection.split(" - ")[0]
+
+    try:
+        cursor = connection.cursor()
+
+        query_medID = """
+            SELECT m.medID 
+            FROM medicines AS m
+            JOIN medSup AS ms ON m.medID = ms.medID
+            WHERE m.medName = %s AND ms.dosage = %s;
+        """
+        cursor.execute(query_medID, (medName, dosage))
+        medID = cursor.fetchone()
+        if not medID:
+            msg.showerror("Error", "Selected medicine does not exist in the database.")
+            return
+        medID = medID[0]
+
+        print(customerID, medID, docID)
+
+        cursor.execute("SELECT MAX(presID) FROM prescriptions;")
+        result = cursor.fetchone()
+        numPresID = letterKeyRemover(result[0]) + 1 if result[0] else 1
+        new_presID = f"E{numPresID:04d}"
+
+        print("CHECK1")
+        query_insert = """
+            INSERT INTO prescriptions (presID, customerID, medID, docID)
+            VALUES (%s, %s, %s, %s);
+        """
+        cursor.execute(query_insert, (new_presID, customerID, medID, docID))
+        connection.commit()
+        print("CHECK2")
+
+
+        msg.showinfo("Success", f"Prescription added successfully with ID: {new_presID}")
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to add prescription: {e}")
+
+def updatePrescription():
+    try:
+        selected_prescription = prescSelectionVar.get()
+        new_medicine = newPrescMedVar.get()
+        new_doctor = newDoctorVar.get()
+
+        if not selected_prescription or " - " not in selected_prescription:
+            msg.showerror("Error", "Please select a valid prescription.")
+            return
+
+        presID, customer_details = selected_prescription.split(" - ", 1)
+        customer_name, customer_id = customer_details.rsplit("(", 1)
+        customer_id = customer_id.strip(")")
+
+        if not new_medicine or " - " not in new_medicine:
+            msg.showerror("Error", "Please select a valid medicine.")
+            return
+
+        if not new_doctor or " - " not in new_doctor:
+            msg.showerror("Error", "Please select a valid doctor.")
+            return
+
+        medID = new_medicine.split(" - ")[0]  # Get the first part (medID)
+
+        docID = new_doctor.split(" - ")[0]  # Get the first part (docID)
+
+        print(f"Customer ID: {customer_id}, Med ID: {medID}, Doc ID: {docID}, Pres ID: {presID}")
+
+        cursor = connection.cursor()
+        query = """
+            SELECT COUNT(*) 
+            FROM prescriptions 
+            WHERE customerID = %s AND medID = %s AND docID = %s AND presID != %s;
+        """
+        cursor.execute(query, (customer_id, medID, docID, presID))
+        exists = cursor.fetchone()[0]
+
+        if exists:
+            msg.showerror("Error", "A prescription with the same details already exists.")
+            return
+
+        update_query = """
+            UPDATE prescriptions 
+            SET medID = %s, docID = %s 
+            WHERE presID = %s;
+        """
+        cursor.execute(update_query, (medID, docID, presID))
+        connection.commit()
+
+        msg.showinfo("Success", "Prescription updated successfully.")
+
+        navUpdatePrescription()
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to update prescription: {e}")
+    except Exception as e:
+        msg.showerror("Error", f"Unexpected error: {e}")
+
+
 
 #----------------------------------------- SALE FUNCTIONS -----------------------------------------#
 
@@ -1308,9 +1505,9 @@ priceInput.grid(row=3, column=1, sticky="w", padx=10, pady=5)
 
 # Supplier Selection
 tk.Label(addMedicineF, text="Supplier:", font=("Arial", 14)).grid(row=4, column=0, sticky="e", padx=10, pady=5)
-supplierVar = tk.StringVar()  # Variable to hold selected supplier
-supplierDropdown = ttk.Combobox(addMedicineF, textvariable=supplierVar, state="readonly", font=("Arial", 14), width=37)
-supplierDropdown.grid(row=4, column=1, sticky="w", padx=10, pady=5)
+supplierVarMed = tk.StringVar()  # Variable to hold selected supplier
+supplierDropdownMed = ttk.Combobox(addMedicineF, textvariable=supplierVarMed, state="readonly", font=("Arial", 14), width=37)
+supplierDropdownMed.grid(row=4, column=1, sticky="w", padx=10, pady=5)
 
 # Dosage
 tk.Label(addMedicineF, text="Dosage (number only):", font=("Arial", 14)).grid(row=5, column=0, sticky="e", padx=10, pady=5)
@@ -1333,7 +1530,7 @@ priceBoughtInput = tk.Entry(addMedicineF, font=("Arial", 14), width=40)
 priceBoughtInput.grid(row=8, column=1, sticky="w", padx=10, pady=5)
 
 # Buttons
-tk.Button(addMedicineF, text="Add Medicine", font=("Arial", 14), command=addNewMedicine).grid(row=9, column=0, pady=20, sticky="e", padx=10)
+tk.Button(addMedicineF, text="Add Medicine", font=("Arial", 14), command=lambda: addNewMedicine()).grid(row=9, column=0, pady=20, sticky="e", padx=10)
 tk.Button(addMedicineF, text="Back", font=("Arial", 14), command=goBack).grid(row=9, column=1, pady=20, sticky="w", padx=10)
 
 # Configure the grid to adjust properly
@@ -1536,8 +1733,8 @@ tk.Label(updateCustomerF, text="Update Customer", font=("Arial", 24)).pack(pady=
 # Dropdown for Customer Selection
 tk.Label(updateCustomerF, text="Select Customer:", font=("Arial", 14)).pack(pady=5)
 updateCustomerVar = tk.StringVar()
-customerDropdown = ttk.Combobox(updateCustomerF, textvariable=updateCustomerVar, state="readonly", font=("Arial", 14), width=50)
-customerDropdown.pack(pady=5)
+customerDropdownNON = ttk.Combobox(updateCustomerF, textvariable=updateCustomerVar, state="readonly", font=("Arial", 14), width=50)
+customerDropdownNON.pack(pady=5)
 
 # Input Fields for Updating
 tk.Label(updateCustomerF, text="Last Name (or NA):", font=("Arial", 14)).pack(pady=5)
@@ -1617,8 +1814,8 @@ tk.Label(updateDoctorF, text="Update Doctor", font=("Arial", 24)).pack(pady=20)
 # Dropdown for Doctor Selection
 tk.Label(updateDoctorF, text="Select Doctor:", font=("Arial", 14)).pack(pady=5)
 updateDoctorVar = tk.StringVar()
-doctorDropdown = ttk.Combobox(updateDoctorF, textvariable=updateDoctorVar, state="readonly", font=("Arial", 14), width=50)
-doctorDropdown.pack(pady=5)
+doctorDropdownNON = ttk.Combobox(updateDoctorF, textvariable=updateDoctorVar, state="readonly", font=("Arial", 14), width=50)
+doctorDropdownNON.pack(pady=5)
 
 # Input Fields for Updating
 tk.Label(updateDoctorF, text="Last Name (or NA):", font=("Arial", 14)).pack(pady=5)
@@ -1650,6 +1847,18 @@ doctorDeleteDropdown.pack(pady=5)
 tk.Button(deleteDoctorF, text="Delete Doctor", font=("Arial", 14), command=lambda: deleteDoctor()).pack(pady=20)
 tk.Button(deleteDoctorF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
+
+
+
+
+
+
+
+
+
+
+
+
 #----------------------PresMenu----------------------------------#
 
 presMenuTitle = tk.Label(presMenuF, text="", font=("Arial", 24))
@@ -1657,7 +1866,75 @@ presMenuTitle.config(text=f"Table: Prescriptions")
 presMenuTitle.pack(pady=20)
 
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(presMenuF, text="Add New Prescription", font=("Arial", 14), command=navAddPrescription).pack(pady=10)
+tk.Button(presMenuF, text="Update Prescription", font=("Arial", 14), command=navUpdatePrescription).pack(pady=10)
+
 tk.Button(presMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+
+
+#----------------------addPres----------------------------------#
+# Frame for Adding New Prescription
+addPrescriptionF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(addPrescriptionF, text="Add New Prescription", font=("Arial", 24)).pack(pady=20)
+
+# Dropdown for Customer Selection
+tk.Label(addPrescriptionF, text="Select Customer:", font=("Arial", 14)).pack(pady=5)
+customerVar = tk.StringVar()
+customerDropdown = ttk.Combobox(addPrescriptionF, textvariable=customerVar, state="readonly", font=("Arial", 14), width=50)
+customerDropdown.pack(pady=5)
+
+# Dropdown for Prescription Medicine
+tk.Label(addPrescriptionF, text="Select Medicine:", font=("Arial", 14)).pack(pady=5)
+prescriptionMedVar = tk.StringVar()
+prescriptionMedDropdown = ttk.Combobox(addPrescriptionF, textvariable=prescriptionMedVar, state="readonly", font=("Arial", 14), width=50)
+prescriptionMedDropdown.pack(pady=5)
+
+# Dropdown for Doctor Selection
+tk.Label(addPrescriptionF, text="Select Doctor:", font=("Arial", 14)).pack(pady=5)
+doctorVar = tk.StringVar()
+doctorDropdown = ttk.Combobox(addPrescriptionF, textvariable=doctorVar, state="readonly", font=("Arial", 14), width=50)
+doctorDropdown.pack(pady=5)
+
+# Buttons
+tk.Button(addPrescriptionF, text="Add Prescription", font=("Arial", 14), command=lambda: addNewPrescription()).pack(pady=20)
+tk.Button(addPrescriptionF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+#----------------------UpdatePres----------------------------------#
+# Frame for Updating Prescription
+updatePrescriptionF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(updatePrescriptionF, text="Update Prescription", font=("Arial", 24)).grid(row=0, column=0, columnspan=2, pady=20)
+
+# Dropdown for Selecting Customer and Prescription ID
+tk.Label(updatePrescriptionF, text="Select Customer and Prescription ID:", font=("Arial", 14)).grid(row=1, column=0, sticky="e", padx=10, pady=5)
+prescSelectionVar = tk.StringVar()
+prescSelectionDropdown = ttk.Combobox(updatePrescriptionF, textvariable=prescSelectionVar, state="readonly", font=("Arial", 14), width=50)
+prescSelectionDropdown.grid(row=1, column=1, sticky="w", padx=10, pady=5)
+
+# Dropdown for Prescription Medicine
+tk.Label(updatePrescriptionF, text="New Prescription Medicine:", font=("Arial", 14)).grid(row=2, column=0, sticky="e", padx=10, pady=5)
+newPrescMedVar = tk.StringVar()
+newPrescMedDropdown = ttk.Combobox(updatePrescriptionF, textvariable=newPrescMedVar, state="readonly", font=("Arial", 14), width=50)
+newPrescMedDropdown.grid(row=2, column=1, sticky="w", padx=10, pady=5)
+
+# Dropdown for Doctor
+tk.Label(updatePrescriptionF, text="New Doctor:", font=("Arial", 14)).grid(row=3, column=0, sticky="e", padx=10, pady=5)
+newDoctorVar = tk.StringVar()
+newDoctorDropdown = ttk.Combobox(updatePrescriptionF, textvariable=newDoctorVar, state="readonly", font=("Arial", 14), width=50)
+newDoctorDropdown.grid(row=3, column=1, sticky="w", padx=10, pady=5)
+
+# Buttons
+tk.Button(updatePrescriptionF, text="Update Prescription", font=("Arial", 14), command=lambda: updatePrescription()).grid(row=4, column=0, pady=20, sticky="e", padx=10)
+tk.Button(updatePrescriptionF, text="Back", font=("Arial", 14), command=goBack).grid(row=4, column=1, pady=20, sticky="w", padx=10)
+
+# Configure the grid to adjust properly
+updatePrescriptionF.columnconfigure(0, weight=1)
+updatePrescriptionF.columnconfigure(1, weight=1)
+
 
 #----------------------SaleMenu----------------------------------#
 
@@ -1667,6 +1944,23 @@ saleMenuTitle.pack(pady=20)
 
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
 tk.Button(saleMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #----------------------SupMenu----------------------------------#
 

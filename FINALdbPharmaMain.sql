@@ -88,11 +88,11 @@ INSERT INTO doctors (docID, doctorLastName, doctorFirstName) VALUES
 ('D10003', 'Mccarthy', 'Julie');
 
 INSERT INTO prescriptions (presID, customerID, medID, docID) VALUES
-('E100001', 'C10001', 'A10001', 'D10001'),
-('E100002', 'C10002', 'A10002', 'D10002'),
-('E100003', 'C10003', 'A10003', 'D10003');
+('E10001', 'C10001', 'A10001', 'D10001'),
+('E10002', 'C10002', 'A10002', 'D10002'),
+('E10003', 'C10003', 'A10003', 'D10003');
 
 INSERT INTO sales (salesID, salesDate, quantitySold, totalPrice, medID, customerID, presID, mOP, discount) VALUES
-('F10001', '2023-01-01', 2, 98.90, 'A10001', 'C10001', 'E100001', 'Cash', 0.20),
-('F10002', '2023-02-15', 1, 46.51, 'A10002', 'C10002', 'E100002', 'E-wallet', 0.20),
-('F10003', '2023-03-10', 3, 75.99, 'A10003', 'C10003', 'E100003', 'Card', 0.00);
+('F10001', '2023-01-01', 2, 98.90, 'A10001', 'C10001', 'E10001', 'Cash', 0.20),
+('F10002', '2023-02-15', 1, 46.51, 'A10002', 'C10002', 'E10002', 'E-wallet', 0.20),
+('F10003', '2023-03-10', 3, 75.99, 'A10003', 'C10003', 'E10003', 'Card', 0.00);

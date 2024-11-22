@@ -28,6 +28,7 @@ SELECT
     s.name AS "Supplier Name",
     s.contact AS "Contact",
     GROUP_CONCAT(m.name SEPARATOR ', ') AS "Medicines Supplied"
+    GROUP_CONCAT(ms.dateOfPurch SEPARATOR ', ') AS "Date of Purchase"
 FROM suppliers s
 JOIN medSup ms ON s.supplierId = ms.supplierId
 JOIN medicines m ON ms.medId = m.medId

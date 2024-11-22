@@ -14,7 +14,7 @@ def showFrame(nextF):
     # REMEMBER TO ADD NEW FRAMES TO THIS LIST
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
              , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF, inventoryReportF, createCustomerF, createDoctorF, createSupplierF
-             , updateCustomerF, updateSupplierF, updateDoctorF]
+             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -200,6 +200,25 @@ def checkIDExists(id):
     except sql.Error as e:
         msg.showerror("Error", f"Failed to check ID existence: {e}")
         return 0
+
+def getDeletableIDs(table_name, id_prefix):
+    try:
+        cursor = connection.cursor()
+        query = f"SELECT {id_prefix}, CONCAT({table_name[:-1]}FirstName, ' ', {table_name[:-1]}LastName) AS fullName FROM {table_name};"
+        cursor.execute(query)
+        all_ids = cursor.fetchall()
+
+        deletable_ids = []
+        for row in all_ids:
+            id = row[0]
+            if not checkIDExists(id):  # Check if the ID is not referenced in other tables
+                deletable_ids.append(f"{id} - {row[1]}")
+        
+        return deletable_ids
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch deletable IDs: {e}")
+        return []
+
 
 #----------------------------------------- MEDICINE FUNCTIONS -----------------------------------------#
 
@@ -673,6 +692,15 @@ def getCustomers():
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch customers: {e}")
 
+def getDeletableCustomers():
+    deletable_customers = getDeletableIDs("customers", "customerID")
+    deleteCustomerVar.set("")  # Reset selection
+    customerDeleteDropdown["values"] = deletable_customers
+
+def navDeleteCustomer():
+    getDeletableCustomers()
+    showFrame(deleteCustomerF)
+
 def navupdateCustomer():
     if connection is None:  
         msg.showerror("Error", "Please connect to the database first.")
@@ -799,6 +827,31 @@ def updateCustomer():
     except sql.Error as e:
         msg.showerror("Error", f"Failed to update customer: {e}")
 
+def deleteCustomer():
+    selected_customer = deleteCustomerVar.get()
+    if not selected_customer:
+        msg.showerror("Error", "Please select a customer to delete.")
+        return
+
+    customerID = selected_customer.split(" - ")[0]
+
+    if checkIDExists(customerID):
+        msg.showerror(
+            "Error",
+            f"Customer ID '{customerID}' exists in related tables (e.g., prescriptions or sales). Deletion not allowed."
+        )
+        return
+
+    try:
+        cursor = connection.cursor()
+        delete_query = "DELETE FROM customers WHERE customerID = %s;"
+        cursor.execute(delete_query, (customerID,))
+        connection.commit()
+
+        msg.showinfo("Success", f"Customer ID '{customerID}' deleted successfully.")
+        getDeletableCustomers()  # Refresh dropdown
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to delete customer: {e}")
 
 
 
@@ -813,6 +866,10 @@ def navUpdateDoctor():
     getDoctors()  
     showFrame(updateDoctorF)
 
+def navDeleteDoctor():
+    getDeletableDoctors()
+    showFrame(deleteDoctorF)
+
 def getDoctors():
     try:
         cursor = connection.cursor()
@@ -823,6 +880,11 @@ def getDoctors():
         doctorDropdown["values"] = doctors
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch doctors: {e}")
+
+def getDeletableDoctors():
+    deletable_doctors = getDeletableIDs("doctors", "docID")
+    deleteDoctorVar.set("")  # Reset selection
+    doctorDeleteDropdown["values"] = deletable_doctors
 
 def createDoctor():
     try:
@@ -926,6 +988,32 @@ def updateDoctor():
     except sql.Error as e:
         msg.showerror("Error", f"Failed to update doctor: {e}")
 
+def deleteDoctor():
+    selected_doctor = deleteDoctorVar.get()
+    if not selected_doctor:
+        msg.showerror("Error", "Please select a doctor to delete.")
+        return
+
+    docID = selected_doctor.split(" - ")[0]
+
+    if checkIDExists(docID):
+        msg.showerror(
+            "Error",
+            f"Doctor ID '{docID}' exists in related tables (e.g., prescriptions). Deletion not allowed."
+        )
+        return
+
+    try:
+        cursor = connection.cursor()
+        delete_query = "DELETE FROM doctors WHERE docID = %s;"
+        cursor.execute(delete_query, (docID,))
+        connection.commit()
+
+        msg.showinfo("Success", f"Doctor ID '{docID}' deleted successfully.")
+        getDeletableDoctors()  # Refresh dropdown
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to delete doctor: {e}")
+
 #----------------------------------------- SUPPLIER FUNCTIONS -----------------------------------------#
 def navCreateSupplier():
     showFrame(createSupplierF)
@@ -937,6 +1025,10 @@ def navUpdateSupplier():
     getSuppliers()  
     showFrame(updateSupplierF)
 
+def navDeleteSupplier():
+    getDeletableSuppliers()
+    showFrame(deleteSupplierF)
+
 def getSuppliers():
     try:
         cursor = connection.cursor()
@@ -947,6 +1039,25 @@ def getSuppliers():
         supplierDropdown["values"] = suppliers
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch suppliers: {e}")
+
+def getDeletableSuppliers():
+    try:
+        cursor = connection.cursor()
+        query = "SELECT supID, supName FROM suppliers;"
+        cursor.execute(query)
+        all_suppliers = cursor.fetchall()
+
+        deletable_suppliers = []
+        for row in all_suppliers:
+            supID = row[0]
+            supName = row[1]
+            if not checkIDExists(supID):  # Check if supplier ID is not referenced in medSup
+                deletable_suppliers.append(f"{supID} - {supName}")
+
+        deleteSupplierVar.set("")  # Reset selection
+        supplierDeleteDropdown["values"] = deletable_suppliers
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch deletable suppliers: {e}")
 
 def createSupplier():
     try:
@@ -1053,6 +1164,32 @@ def updateSupplier():
         getSuppliers() 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to update supplier: {e}")
+
+def deleteSupplier():
+    selected_supplier = deleteSupplierVar.get()
+    if not selected_supplier:
+        msg.showerror("Error", "Please select a supplier to delete.")
+        return
+
+    supID = selected_supplier.split(" - ")[0]
+
+    if checkIDExists(supID):
+        msg.showerror(
+            "Error",
+            f"Supplier ID '{supID}' exists in related tables (e.g., medSup). Deletion not allowed."
+        )
+        return
+
+    try:
+        cursor = connection.cursor()
+        delete_query = "DELETE FROM suppliers WHERE supID = %s;"
+        cursor.execute(delete_query, (supID,))
+        connection.commit()
+
+        msg.showinfo("Success", f"Supplier ID '{supID}' deleted successfully.")
+        getDeletableSuppliers()  # Refresh dropdown
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to delete supplier: {e}")
 
 #----------------------------------------- PRESCRIPTION FUNCTIONS -----------------------------------------#
 
@@ -1337,7 +1474,7 @@ cusMenuTitle.pack(pady=20)
 tk.Button(cusMenuF, text="Show Table", font=("Arial", 14), command=showTableCus).pack(pady=10)
 tk.Button(cusMenuF, text="Add New Customer", font=("Arial", 14), command=navCreateCustomer).pack(pady=10)
 tk.Button(cusMenuF, text="Update Customer", font=("Arial", 14), command=navupdateCustomer).pack(pady=10)
-#tk.Button(cusMenuF, text="Delete Customer", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(cusMenuF, text="Delete Customer", font=("Arial", 14), command=navDeleteCustomer).pack(pady=10)
 
 
 tk.Button(cusMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
@@ -1419,7 +1556,22 @@ updateCustomerDiscountInput.pack(pady=5)
 tk.Button(updateCustomerF, text="Update Customer", font=("Arial", 14), command=lambda: updateCustomer()).pack(pady=20)
 tk.Button(updateCustomerF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
+#----------------------DeleteCustomer----------------------------------#
+# Frame for Delete Customer
+deleteCustomerF = tk.Frame(root, width=1280, height=720)
 
+# Title
+tk.Label(deleteCustomerF, text="Delete Customer", font=("Arial", 24)).pack(pady=20)
+
+# Dropdown for Customer Selection
+tk.Label(deleteCustomerF, text="Select Customer to Delete:", font=("Arial", 14)).pack(pady=5)
+deleteCustomerVar = tk.StringVar()
+customerDeleteDropdown = ttk.Combobox(deleteCustomerF, textvariable=deleteCustomerVar, state="readonly", font=("Arial", 14), width=50)
+customerDeleteDropdown.pack(pady=5)
+
+# Buttons
+tk.Button(deleteCustomerF, text="Delete Customer", font=("Arial", 14), command=lambda: deleteCustomer()).pack(pady=20)
+tk.Button(deleteCustomerF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
 #----------------------DocMenu----------------------------------#
 
@@ -1430,6 +1582,7 @@ docMenuTitle.pack(pady=20)
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
 tk.Button(docMenuF, text="Add New Doctor", font=("Arial", 14), command=navCreateDoctor).pack(pady=10)
 tk.Button(docMenuF, text="Update Doctor", font=("Arial", 14), command=navUpdateDoctor).pack(pady=10)
+tk.Button(docMenuF, text="Delete Doctor", font=("Arial", 14), command=navDeleteDoctor).pack(pady=10)
 
 tk.Button(docMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -1480,7 +1633,22 @@ updateDoctorFirstNameInput.pack(pady=5)
 tk.Button(updateDoctorF, text="Update Doctor", font=("Arial", 14), command=lambda: updateDoctor()).pack(pady=20)
 tk.Button(updateDoctorF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
+#----------------------DeleteDoc----------------------------------#
+# Frame for Delete Doctor
+deleteDoctorF = tk.Frame(root, width=1280, height=720)
 
+# Title
+tk.Label(deleteDoctorF, text="Delete Doctor", font=("Arial", 24)).pack(pady=20)
+
+# Dropdown for Doctor Selection
+tk.Label(deleteDoctorF, text="Select Doctor to Delete:", font=("Arial", 14)).pack(pady=5)
+deleteDoctorVar = tk.StringVar()
+doctorDeleteDropdown = ttk.Combobox(deleteDoctorF, textvariable=deleteDoctorVar, state="readonly", font=("Arial", 14), width=50)
+doctorDeleteDropdown.pack(pady=5)
+
+# Buttons
+tk.Button(deleteDoctorF, text="Delete Doctor", font=("Arial", 14), command=lambda: deleteDoctor()).pack(pady=20)
+tk.Button(deleteDoctorF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
 #----------------------PresMenu----------------------------------#
 
@@ -1509,7 +1677,7 @@ supMenuTitle.pack(pady=20)
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
 tk.Button(supMenuF, text="Add New Supplier", font=("Arial", 14), command=navCreateSupplier).pack(pady=10)
 tk.Button(supMenuF, text="Update Supplier", font=("Arial", 14), command=navUpdateSupplier).pack(pady=10)
-
+tk.Button(supMenuF, text="Delete Supplier", font=("Arial", 14), command=navDeleteSupplier).pack(pady=10)
 
 tk.Button(supMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -1560,6 +1728,22 @@ updateSupplierContactInput.pack(pady=5)
 tk.Button(updateSupplierF, text="Update Supplier", font=("Arial", 14), command=lambda: updateSupplier()).pack(pady=20)
 tk.Button(updateSupplierF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
+#----------------------DeleteSup----------------------------------#
+# Frame for Delete Supplier
+deleteSupplierF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(deleteSupplierF, text="Delete Supplier", font=("Arial", 24)).pack(pady=20)
+
+# Dropdown for Supplier Selection
+tk.Label(deleteSupplierF, text="Select Supplier to Delete:", font=("Arial", 14)).pack(pady=5)
+deleteSupplierVar = tk.StringVar()
+supplierDeleteDropdown = ttk.Combobox(deleteSupplierF, textvariable=deleteSupplierVar, state="readonly", font=("Arial", 14), width=50)
+supplierDeleteDropdown.pack(pady=5)
+
+# Buttons
+tk.Button(deleteSupplierF, text="Delete Supplier", font=("Arial", 14), command=lambda: deleteSupplier()).pack(pady=20)
+tk.Button(deleteSupplierF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 #-------------------------------------------------------------#
 arrF.append(loginF)
 showFrame(loginF)

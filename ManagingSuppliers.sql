@@ -31,7 +31,7 @@ AND s.supName = '%s'
 GROUP BY m.medID, ms.dosage, ms.dateBought, ms.priceBought
 ORDER BY ms.dateBought DESC;  
 
---View table
+--View table by itself(suppliers)
 SELECT supId, supName, contact
 FROM suppliers;
 

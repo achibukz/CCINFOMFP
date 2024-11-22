@@ -13,7 +13,7 @@ arrF = []
 def showFrame(nextF):
     # REMEMBER TO ADD NEW FRAMES TO THIS LIST
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
-             , updateMedicineF, deleteMedicineF]
+             , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -98,7 +98,16 @@ def navDeleteMedicine():
     getDeletableMed()
     showFrame(deleteMedicineF)
 
+def navLowStock():
+    displayLowStock()
+    showFrame(lowStockF)
 
+def navExpirationDates():
+    displayExpirationDates()
+    showFrame(expirationDatesF)
+
+def navInventoryReport():
+    showFrame(inventoryReportF)
 
 def getSuppliers():
     try:
@@ -129,22 +138,20 @@ def getMedName():
 def getDeletableMed():
     try:
         cursor = connection.cursor()
-        query = "SELECT medID, medName FROM medicines;"
+        query = "SELECT m.medID, m.medName, ms.dosage FROM medicines m JOIN medSup ms ON m.medID = ms.medID;"
         cursor.execute(query)
         medicines = cursor.fetchall()
 
         deletable_medicines = []
-        for medID, medName in medicines:
-            print(medID)
+        for medID, medName, dosage in medicines:
             if not checkIDExists(medID):  # Only include medicines not referenced in other tables
-                deletable_medicines.append(f"{medID} - {medName}")
+                deletable_medicines.append(f"{medName} - {dosage}")
 
         deletableMedicineDropdown["values"] = deletable_medicines
         deletableMedicineVar.set("")  # Reset selection
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch deletable medicines: {e}")
-
 
 def checkIDExists(id):
     try:
@@ -235,18 +242,19 @@ def showTableMed(sort_by="ID"):
         msg.showerror("Error", f"Failed to fetch data: {e}")
 
 def addNewMedicine():
-    check = 1
+    check = 1  # Indicator for validation success
     try:
         name = nameInput.get().strip()
         med_type = medTypeVar.get().strip()
         price = priceInput.get().strip()
-        supplier = supplierVar.get().strip() 
+        supplier = supplierVar.get().strip()
         dosage = dosageInput.get().strip()
         expiry_date = expiryInput.get().strip()
         stock_bought = inStockInput.get().strip()
         price_bought = priceBoughtInput.get().strip()
-        date_bought = date.today().isoformat()  
+        date_bought = date.today().isoformat()
 
+        # Validation
         if not all([name, med_type, price, supplier, dosage, expiry_date, stock_bought, price_bought]):
             msg.showerror("Error", "All fields must be filled out.")
             check = 0
@@ -255,7 +263,6 @@ def addNewMedicine():
         if len(name) > 50:
             msg.showerror("Error", "Medicine name must not exceed 50 characters.")
             check = 0
-            
             return
 
         if med_type not in ["OTC", "Prescription"]:
@@ -268,70 +275,83 @@ def addNewMedicine():
             price_bought = float(price_bought)
             if price <= 0 or price_bought <= 0:
                 msg.showerror("Error", "Price and Price Bought must be greater than 0.")
+                check = 0
                 return
         except ValueError:
             msg.showerror("Error", "Price and Price Bought must be valid decimal numbers.")
+            check = 0
             return
 
         if " - " not in supplier:
             msg.showerror("Error", "Please select a valid supplier from the dropdown.")
+            check = 0
             return
-        supID = supplier.split(" - ")[0]  
+        supID = supplier.split(" - ")[0]
 
         try:
             dosage_value = int(dosage)
             if dosage_value <= 0:
                 msg.showerror("Error", "Dosage must be a positive integer.")
+                check = 0
                 return
-            dosage = f"{dosage_value}mg" 
+            dosage = f"{dosage_value}mg"
         except ValueError:
             msg.showerror("Error", "Dosage must be a valid integer.")
+            check = 0
             return
 
         try:
             expiry_date_obj = date.fromisoformat(expiry_date)
             if expiry_date_obj <= date.today():
                 msg.showerror("Error", "Expiry date must be a future date.")
+                check = 0
                 return
         except ValueError:
             msg.showerror("Error", "Expiry date must be in the format YYYY-MM-DD.")
+            check = 0
             return
 
         try:
             stock_bought = int(stock_bought)
             if stock_bought <= 0:
                 msg.showerror("Error", "Stock Bought must be a positive integer.")
+                check = 0
                 return
         except ValueError:
             msg.showerror("Error", "Stock Bought must be a valid integer.")
+            check = 0
             return
 
+        # Check for uniqueness (medName, dosage, supID)
         cursor = connection.cursor()
-        query = """ 
-            SELECT COUNT(*) 
-            FROM medicines 
-            JOIN medSup ON medicines.medID = medSup.medID 
-            WHERE medicines.medName = %s AND medSup.dosage = %s;
+        query = """
+            SELECT COUNT(*)
+            FROM medicines
+            JOIN medSup ON medicines.medID = medSup.medID
+            WHERE medicines.medName = %s AND medSup.dosage = %s AND medSup.supID = %s;
         """
-        cursor.execute(query, (name, dosage))
+        cursor.execute(query, (name, dosage, supID))
         exists = cursor.fetchone()[0]
 
         if exists:
-            msg.showerror("Error", "A medicine with the same name and dosage already exists.")
+            msg.showerror("Error", "A medicine with the same name, dosage, and supplier already exists.")
             check = 0
             return
 
         if check:
+            # Generate new medID
             cursor.execute("SELECT MAX(medID) FROM medicines;")
             result = cursor.fetchone()
             numMedID = letterKeyRemover(result[0]) + 1 if result[0] else 1
             next_medID = f"A{numMedID:04d}"
 
+            # Insert into medicines
             cursor.execute(
                 "INSERT INTO medicines (medID, medName, medType, price) VALUES (%s, %s, %s, %s);",
                 (next_medID, name, med_type, price)
             )
 
+            # Insert into medSup
             cursor.execute(
                 """
                 INSERT INTO medSup (medID, supID, dosage, expiry_date, stockBought, dateBought, priceBought)
@@ -435,41 +455,176 @@ def updateMedicine():
         msg.showerror("Error", f"Unexpected error occurred: {e}")
 
 def deleteMedicine():
-    """
-    Deletes the selected medicine from the dropdown if it is not referenced in other tables.
-    """
     selected_medicine = deletableMedicineVar.get()
     if not selected_medicine:
         msg.showerror("Error", "Please select a medicine to delete.")
         return
 
-    # Extract medID from the dropdown value
-    medID = selected_medicine.split(" - ")[0]
-
-    # Check if the medicine is referenced in other tables
-    if checkIDExists(medID):
-        msg.showerror(
-            "Error",
-            f"Medicine ID '{medID}' exists in related tables (prescriptions or sales). Deletion not allowed."
-        )
-        return
+    medName = selected_medicine.split(" - ")[0]
 
     try:
-        # Proceed with deletion
         cursor = connection.cursor()
+        get_medID_query = "SELECT medID FROM medicines WHERE medName = %s;"
+        cursor.execute(get_medID_query, (medName,))
+        medID_result = cursor.fetchone()
+
+        if not medID_result:
+            msg.showerror("Error", f"No medicine found with the name '{medName}'.")
+            return
+
+        medID = medID_result[0]
+
+        # Check if the medID exists in related tables
+        if checkIDExists(medID):
+            msg.showerror(
+                "Error",
+                f"Medicine ID '{medID}' exists in related tables (prescriptions or sales). Deletion not allowed."
+            )
+            return
+
+        # Proceed with deletion
         delete_query = "DELETE FROM medicines WHERE medID = %s;"
         cursor.execute(delete_query, (medID,))
         connection.commit()
 
         msg.showinfo("Success", f"Medicine ID '{medID}' deleted successfully.")
-        getDeletableMed()  # Refresh the dropdown after deletion
+        getDeletableMed()  # Refresh the dropdown list of deletable medicines
+
     except sql.Error as e:
         msg.showerror("Error", f"Failed to delete medicine: {e}")
     except Exception as e:
         msg.showerror("Error", f"Unexpected error: {e}")
 
+def displayLowStock():
+    try:
+        cursor = connection.cursor()
+        query = """
+            WITH low_stock AS (
+                SELECT ms.dosage, m.medName, SUM(ms.stockBought) AS total_stock
+                FROM medicines m
+                JOIN medSup ms ON m.medID = ms.medID
+                GROUP BY m.medName, ms.dosage
+                HAVING total_stock < 10
+            )
+            SELECT m.medName, ms.dosage, ms.stockBought, s.supName
+            FROM medicines m
+            JOIN medSup ms ON m.medID = ms.medID
+            JOIN suppliers s ON ms.supID = s.supID
+            WHERE EXISTS (
+                SELECT 1
+                FROM low_stock ls
+                WHERE ls.medName = m.medName AND ls.dosage = ms.dosage
+            )
+            ORDER BY m.medName, ms.dosage, ms.stockBought;
+        """
+        cursor.execute(query)
+        low_stock_medicines = cursor.fetchall()
 
-#----------------------------------------- MEDICINE FUNCTIONS -----------------------------------------#
+        lowStockTree.delete(*lowStockTree.get_children())
+
+        for medName, dosage, stock, supName in low_stock_medicines:
+            lowStockTree.insert("", tk.END, values=(medName, dosage, stock, supName))
+
+        if not low_stock_medicines:
+            msg.showinfo("Info", "No low-stock medicines found.")
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch and display low-stock medicines: {e}")
+
+def displayExpirationDates():
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT m.medName, ms.dosage, s.supName, ms.expiry_date
+            FROM medicines m
+            JOIN medSup ms ON m.medID = ms.medID
+            JOIN suppliers s ON ms.supID = s.supID
+            ORDER BY ms.expiry_date;
+        """
+        cursor.execute(query)
+        data = cursor.fetchall()
+
+        expirationTree.delete(*expirationTree.get_children())
+
+        for medName, dosage, supName, expiry_date in data:
+            expirationTree.insert("", tk.END, values=(medName, dosage, supName, expiry_date))
+
+        if not data:
+            msg.showinfo("Info", "No medicines found.")
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch expiration dates: {e}")
+
+def displayInventoryReport():
+    """
+    Generate and display an inventory report showing the stock remaining at the end of a given year and month.
+    """
+    # Get year and month from input fields
+    year = yearInput.get().strip()
+    month = monthInput.get().strip()
+
+    # Validate inputs
+    if not year.isdigit() or not month.isdigit():
+        msg.showerror("Error", "Please enter valid numeric values for Year and Month.")
+        return
+
+    year = int(year)
+    month = int(month)
+
+    if month < 1 or month > 12:
+        msg.showerror("Error", "Month must be between 1 and 12.")
+        return
+
+    try:
+        # Fetch data from the database
+        cursor = connection.cursor()
+        query = """
+            WITH inventory_summary AS (
+                SELECT 
+                    m.medID, 
+                    m.medName, 
+                    ms.dosage, 
+                    s.supName, 
+                    SUM(ms.stockBought) AS total_stock,
+                    COALESCE(SUM(sales.quantitySold), 0) AS total_sold
+                FROM medicines m
+                JOIN medSup ms ON m.medID = ms.medID
+                LEFT JOIN suppliers s ON ms.supID = s.supID
+                LEFT JOIN sales sales ON m.medID = sales.medID
+                    AND YEAR(sales.salesDate) <= %s
+                    AND MONTH(sales.salesDate) <= %s
+                WHERE YEAR(ms.dateBought) <= %s
+                  AND MONTH(ms.dateBought) <= %s
+                GROUP BY m.medID, m.medName, ms.dosage, s.supName
+            )
+            SELECT 
+                medID, 
+                medName, 
+                dosage, 
+                supName, 
+                (total_stock - total_sold) AS remaining_stock
+            FROM inventory_summary
+            WHERE (total_stock - total_sold) > 0;
+        """
+        cursor.execute(query, (year, month, year, month))
+        data = cursor.fetchall()
+
+        # Clear existing rows in Treeview
+        reportTree.delete(*reportTree.get_children())
+
+        # Populate Treeview with results
+        for medID, medName, dosage, supName, remaining_stock in data:
+            reportTree.insert("", tk.END, values=(medID, medName, dosage, remaining_stock, supName))
+
+        # Show info message if no data found
+        if not data:
+            msg.showinfo("Info", "No inventory data found for the given year and month.")
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to generate inventory report: {e}")
+
+
+#----------------------------------------- CUSTOMER FUNCTIONS -----------------------------------------#
 
 def showTableCus(sort_by="ID"):
     sort_column_map = {
@@ -566,10 +721,13 @@ medTitleLabel = tk.Label(medMenuF, text="", font=("Arial", 24))
 medTitleLabel.config(text=f"Table: Medicines")
 medTitleLabel.pack(pady=20)
 
-tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=showTableMed).pack(pady=10)
+tk.Button(medMenuF, text="Records", font=("Arial", 14), command=showTableMed).pack(pady=10)
 tk.Button(medMenuF, text="Add New Medicine", font=("Arial", 14), command=navAddMed).pack(pady=10)
 tk.Button(medMenuF, text="Update Medicine", font=("Arial", 14), command=navUpdateMed).pack(pady=10)
 tk.Button(medMenuF, text="Delete Medicine", font=("Arial", 14), command=navDeleteMedicine).pack(pady=10)
+tk.Button(medMenuF, text="Low Stock Medicines", font=("Arial", 14), command=navLowStock).pack(pady=10)
+tk.Button(medMenuF, text="Expiry Dates", font=("Arial", 14), command=navExpirationDates).pack(pady=10)
+tk.Button(medMenuF, text="Inventory Report", font=("Arial", 14), command=navInventoryReport).pack(pady=10)
 
 tk.Button(medMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -704,6 +862,80 @@ deletableMedicineDropdown.pack(pady=5)
 
 tk.Button(deleteMedicineF, text="Delete Medicine", font=("Arial", 14), command=deleteMedicine).pack(pady=20)
 tk.Button(deleteMedicineF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+#----------------------LowStock----------------------------------#
+# Low Stock Frame
+lowStockF = tk.Frame(root, width=1280, height=720)
+
+tk.Label(lowStockF, text="Low Stock Medicines", font=("Arial", 24)).pack(pady=20)
+
+# Treeview for displaying low-stock medicines
+lowStockTree = ttk.Treeview(lowStockF, columns=("Name", "Dosage", "Stock", "Supplier"), show="headings", height=20)
+lowStockTree.pack(fill="both", expand=True)
+
+lowStockTree.heading("Name", text="Medicine Name")
+lowStockTree.heading("Dosage", text="Dosage")
+lowStockTree.heading("Stock", text="Stock")
+lowStockTree.heading("Supplier", text="Supplier")
+
+# Add Refresh and Back Buttons
+tk.Button(lowStockF, text="Refresh", font=("Arial", 14), command=displayLowStock).pack(pady=10)
+tk.Button(lowStockF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+#----------------------ExpirationDates----------------------------------#
+# Frame for Viewing Expiration Dates
+expirationDatesF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(expirationDatesF, text="Medicine Expiration Dates", font=("Arial", 24)).pack(pady=20)
+
+# Treeview for displaying expiration data
+expirationTree = ttk.Treeview(expirationDatesF, columns=("Name", "Dosage", "Supplier", "Expiry Date"), show="headings", height=20)
+expirationTree.pack(fill="both", expand=True)
+
+expirationTree.heading("Name", text="Medicine Name")
+expirationTree.heading("Dosage", text="Dosage")
+expirationTree.heading("Supplier", text="Supplier")
+expirationTree.heading("Expiry Date", text="Expiry Date")
+
+# Buttons
+tk.Button(expirationDatesF, text="Refresh", font=("Arial", 14), command=displayExpirationDates).pack(pady=10)
+tk.Button(expirationDatesF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+#----------------------InventoryReport----------------------------------#
+# Frame for Inventory Report
+inventoryReportF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(inventoryReportF, text="Inventory Report", font=("Arial", 24)).pack(pady=20)
+
+# Input Fields for Year and Month
+tk.Label(inventoryReportF, text="Enter Year:", font=("Arial", 14)).pack(pady=5)
+yearInput = tk.Entry(inventoryReportF, font=("Arial", 14), width=10)
+yearInput.pack(pady=5)
+
+tk.Label(inventoryReportF, text="Enter Month (1-12):", font=("Arial", 14)).pack(pady=5)
+monthInput = tk.Entry(inventoryReportF, font=("Arial", 14), width=10)
+monthInput.pack(pady=5)
+
+# Treeview for displaying the report
+reportTree = ttk.Treeview(inventoryReportF, columns=("ID", "Name", "Dosage", "Quantity", "Supplier"), show="headings", height=20)
+reportTree.pack(fill="both", expand=True)
+
+reportTree.heading("ID", text="Medicine ID")
+reportTree.heading("Name", text="Medicine Name")
+reportTree.heading("Dosage", text="Dosage Form")
+reportTree.heading("Quantity", text="Quantity in Stock")
+reportTree.heading("Supplier", text="Supplier Name")
+
+# Buttons
+tk.Button(inventoryReportF, text="Generate Report", font=("Arial", 14), command=displayInventoryReport).pack(pady=10)
+tk.Button(inventoryReportF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+
+
+
+
 
 #----------------------CusMenu----------------------------------#
 

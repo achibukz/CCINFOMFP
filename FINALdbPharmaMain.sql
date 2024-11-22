@@ -1,28 +1,27 @@
--- CREATE TABLE Statements
 CREATE TABLE suppliers (
-    supplierID VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
+    supID VARCHAR(50) PRIMARY KEY,
+    supName VARCHAR(100) NOT NULL,
     contact VARCHAR(50)
 );
 
 CREATE TABLE medicines (
     medID VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(50) NOT NULL,
+    medName VARCHAR(50) NOT NULL,
     medType VARCHAR(255),
     price DECIMAL(10,2) NOT NULL
 );
 
 CREATE TABLE medSup (
     medID VARCHAR(50),
-    supplierID VARCHAR(50),
+    supID VARCHAR(50),
     dosage VARCHAR(50),
     expiry_date DATE,
     stockBought INT NOT NULL,
     dateBought DATE,
     priceBought DECIMAL(10,2) NOT NULL,
-    PRIMARY KEY(medID, supplierID),
+    PRIMARY KEY(medID, supID),
     FOREIGN KEY (medID) REFERENCES medicines(medID) ON DELETE CASCADE,
-    FOREIGN KEY (supplierID) REFERENCES suppliers(supplierID) ON DELETE CASCADE
+    FOREIGN KEY (supID) REFERENCES suppliers(supID) ON DELETE CASCADE
 );
 
 CREATE TABLE customers (
@@ -63,17 +62,17 @@ CREATE TABLE sales (
     FOREIGN KEY (presID) REFERENCES prescriptions(presID) ON DELETE CASCADE
 );
 
-INSERT INTO suppliers (supplierID, name, contact) VALUES
+INSERT INTO suppliers (supID, supName, contact) VALUES
 ('B10005', 'Andrews-White', '09171234567'),
 ('B10006', 'Greene-Williams', '09181234568'),
 ('B10007', 'Fisher, Diaz and Walker', '09191234569');
 
-INSERT INTO medicines (medID, name, medType, price) VALUES
+INSERT INTO medicines (medID, medName, medType, price) VALUES
 ('A10001', 'Paracetamol', 'OTC', 49.45),
 ('A10002', 'Ibuprofen', 'OTC', 46.51),
 ('A10003', 'Cetirizine', 'OTC', 25.33);
 
-INSERT INTO medSup (medID, supplierID, dosage, expiry_date, stockBought, dateBought, priceBought) VALUES
+INSERT INTO medSup (medID, supID, dosage, expiry_date, stockBought, dateBought, priceBought) VALUES
 ('A10001', 'B10005', '500mg', '2026-12-30', 100, '2023-11-10', 45.00),
 ('A10002', 'B10006', '200mg', '2027-01-15', 200, '2023-11-15', 42.00),
 ('A10003', 'B10007', '10mg', '2026-11-20', 150, '2023-11-18', 22.00);

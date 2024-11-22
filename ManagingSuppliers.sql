@@ -1,15 +1,8 @@
 
 --Creating a new supplier record
-INSERT INTO suppliers (supplierId, name, contact)
-VALUES ('%s', '%s', '%s');
-
 -- no supplier ID as it is automatically created
-
-INSERT INTO suppliers (name)
-VALUES ('%s');
-
-INSERT INTO suppliers (contact)
-VALUES ('%s');
+INSERT INTO suppliers (name, contact)
+VALUES ('%s', '%s');
 
 -- Reading the supplier record to check if the supplier provides a specific type of medicine
 SELECT s.supplierId, s.name, s.contact
@@ -24,11 +17,11 @@ SET name = '%s',
     contact = '%s'
 WHERE supplierId = '%s';
 
--- Deleting the supplier record if the supplier no longer provide any medicines
-DELETE s
-FROM suppliers s
-LEFT JOIN medSup ms ON s.supplierId = ms.supplierId
-WHERE ms.supplierId IS NULL;
+--Delete supplier Record
+DELETE 
+FROM suppliers
+WHERE supplierId = '%s' AND name = '%s';
+
 
 -- Supplier Report (Supplier ID, Supplier Name, Contact, Medicines Supplied) for a given Year and Month. 
 SELECT 
@@ -42,3 +35,13 @@ JOIN medSup ms ON s.supplierId = ms.supplierId
 JOIN medicines m ON ms.medId = m.medId
 WHERE YEAR(ms.dateOfPurch) = '%s'  AND MONTH(ms.dateOfPurch) = '%s'
 GROUP BY s.supplierId, s.name, s.contact;
+
+--not sure if needed
+
+-- Deleting the supplier record if the supplier no longer provide any medicines
+DELETE s
+FROM suppliers s
+LEFT JOIN medSup ms ON s.supplierId = ms.supplierId
+WHERE ms.supplierId IS NULL;
+
+

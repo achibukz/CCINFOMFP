@@ -16,7 +16,7 @@ def showFrame(nextF):
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
              , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF, inventoryReportF, createCustomerF, createDoctorF, createSupplierF
              , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF, viewTableF, deletePrescriptionF
-             , selectCustomerF, selectOTCMedicineF, selectPrescriptionMedicineF, confirmSaleF]
+             , selectCustomerF, selectOTCMedicineF, selectPrescriptionMedicineF, confirmSaleF, deleteSalesF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -1627,8 +1627,7 @@ def getPrescMedsForCustomer(customerID, variable):
         msg.showerror("Error", f"Failed to fetch prescription medicines: {e}")
         return []
 
-
-#----------------------navAddNewSale----------------------------------#
+#----------------------------------------- SALE FUNCTIONS -----------------------------------------#
 def navAddNewSale():
     """
     Navigate to the frame to select an existing customer for a new sale.
@@ -1641,7 +1640,6 @@ def navAddNewSale():
     customerDropdownSale["values"] = getCustomersForSales(customerVar)
     showFrame(selectCustomerF)
 
-#----------------------navAddSalesOTC----------------------------------#
 def navAddSalesOTC():
     """
     Navigate to the frame to select OTC medicines for a new sale.
@@ -1653,7 +1651,6 @@ def navAddSalesOTC():
     otcMedDropdown["values"] = getOTCMeds(selectedMedVar)
     showFrame(selectOTCMedicineF)
 
-#----------------------navAddSalesPrescription----------------------------------#
 def navAddSalesPrescription():
     """
     Navigate to the frame to select prescription medicines for a new sale.
@@ -1670,7 +1667,6 @@ def navAddSalesPrescription():
 
     showFrame(selectPrescriptionMedicineF)
 
-#----------------------navConfirmQuantity----------------------------------#
 def navConfirmQuantity():
     """
     Navigate to the frame to confirm the quantity of the selected medicine.
@@ -1704,7 +1700,6 @@ def navConfirmQuantity():
     except Exception as e:
         msg.showerror("Error", f"Invalid input: {e}")
 
-#----------------------navCompleteSale----------------------------------#
 def navCompleteSale():
     """
     Complete the sale and update the database.
@@ -1716,18 +1711,15 @@ def navCompleteSale():
         medID = selected_medicine.split(" - ")[0]
         mOP = mOPVar.get()
 
-        # Validate Mode of Payment
         if not mOP:
             msg.showerror("Error", "Please select a Mode of Payment.")
             return
 
-        # Check for Discount
         cursor = connection.cursor()
         cursor.execute("SELECT HasDisCard FROM customers WHERE customerID = %s", (customerID,))
         has_discount = cursor.fetchone()[0]
         discount = 0.2 if has_discount else 0
 
-        # Get Prescription ID (presID)
         cursor.execute(
             "SELECT presID FROM prescriptions WHERE customerID = %s AND medID = %s",
             (customerID, medID)
@@ -1735,7 +1727,6 @@ def navCompleteSale():
         pres_result = cursor.fetchone()
         presID = pres_result[0] if pres_result else None
 
-        # Calculate Total Price
         cursor.execute("SELECT price FROM medicines WHERE medID = %s", (medID,))
         price_result = cursor.fetchone()
         if not price_result:
@@ -1746,19 +1737,16 @@ def navCompleteSale():
         total_price = price_per_unit * quantity
         discounted_price = round(total_price * (1 - discount), 2)  # Ensure it's rounded to 2 decimal places
 
-        # Generate new salesID
         cursor.execute("SELECT MAX(salesID) FROM sales;")
         result = cursor.fetchone()
         new_salesID = f"S{(int(result[0][1:]) + 1) if result[0] else 1:04d}"
 
-        # Insert into Sales
         sale_query = """
             INSERT INTO sales (salesID, salesDate, quantitySold, totalPrice, medID, customerID, presID, mOP, discount)
             VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, %s, %s);
         """
         cursor.execute(sale_query, (new_salesID, quantity, discounted_price, medID, customerID, presID, mOP, discount))
 
-        # Update Stock
         stock_update_query = """
             UPDATE medSup SET stockBought = stockBought - %s
             WHERE medID = %s AND stockBought >= %s LIMIT 1;
@@ -1778,8 +1766,74 @@ def navCompleteSale():
     except Exception as e:
         msg.showerror("Error", f"Unexpected error occurred: {e}")
 
+def navDeleteSales():
+    """
+    Navigate to the Delete Sales frame and populate the dropdown menu with deletable sales.
+    """
+    if connection is None:
+        msg.showerror("Error", "Please connect to the database first.")
+        return
 
-#----------------------------------------- SALE FUNCTIONS -----------------------------------------#
+    deletable_sales = getDeletableSales(deletableSalesVar)
+    salesDropdown["values"] = deletable_sales
+
+    showFrame(deleteSalesF)
+
+def getDeletableSales(variable):
+    """
+    Fetch all sales IDs and populate the variable for dropdown.
+
+    Args:
+        variable (tk.StringVar): The variable for the dropdown menu.
+    """
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT salesID, salesDate, totalPrice
+            FROM sales;
+        """
+        cursor.execute(query)
+        sales = [f"{row[0]} - {row[1]} - PHP {row[2]:.2f}" for row in cursor.fetchall()]
+        variable.set("")  # Reset dropdown
+        return sales
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch sales: {e}")
+        return []
+
+def deleteSales():
+    """
+    Delete a sale record from the sales table based on the selected salesID.
+    """
+    selected_sale = deletableSalesVar.get()
+
+    if not selected_sale:
+        msg.showerror("Error", "Please select a sale to delete.")
+        return
+
+    salesID = selected_sale.split(" - ")[0]  # Extract the salesID
+
+    try:
+        cursor = connection.cursor()
+
+        # Confirm deletion
+        confirmation = msg.askyesno("Confirm Deletion", f"Are you sure you want to delete Sale ID '{salesID}'?")
+        if not confirmation:
+            return
+
+        # Delete the sale record
+        delete_query = "DELETE FROM sales WHERE salesID = %s;"
+        cursor.execute(delete_query, (salesID,))
+        connection.commit()
+
+        msg.showinfo("Success", f"Sale ID '{salesID}' deleted successfully.")
+
+        # Refresh dropdown for deletable sales
+        navDeleteSales()
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to delete sale: {e}")
+    except Exception as e:
+        msg.showerror("Error", f"Unexpected error occurred: {e}")
+
 
 #---------------------------GUI-------------------------------------------#
 # Main Application
@@ -2376,6 +2430,9 @@ saleMenuTitle.pack(pady=20)
 
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
 tk.Button(saleMenuF, text="Add New Sale", font=("Arial", 14), command=navAddNewSale).pack(pady=10)
+tk.Button(saleMenuF, text="Delete Sales", font=("Arial", 14), command=navDeleteSales).pack(pady=10)
+
+
 
 tk.Button(saleMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -2432,16 +2489,22 @@ mOPDropdown.pack(pady=10)
 tk.Button(confirmSaleF, text="Complete Sale", font=("Arial", 14), command=navCompleteSale).pack(pady=10)
 tk.Button(confirmSaleF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
+#------------------------DELETESales--------------------------#
+# Frame for Deleting Sales
+deleteSalesF = tk.Frame(root, width=1280, height=720)
 
+# Title
+tk.Label(deleteSalesF, text="Delete Sale", font=("Arial", 24)).pack(pady=20)
 
+# Dropdown for Sales
+tk.Label(deleteSalesF, text="Select Sale to Delete:", font=("Arial", 14)).pack(pady=10)
+deletableSalesVar = tk.StringVar()
+salesDropdown = ttk.Combobox(deleteSalesF, textvariable=deletableSalesVar, font=("Arial", 14), width=50, state="readonly")
+salesDropdown.pack(pady=10)
 
-
-
-
-
-
-
-
+# Buttons
+tk.Button(deleteSalesF, text="Delete Sale", font=("Arial", 14), command=deleteSales).pack(pady=10)
+tk.Button(deleteSalesF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
 
 

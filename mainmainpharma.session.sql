@@ -8,10 +8,9 @@ DELETE FROM medsup
 WHERE medID = 'A10004';
 
 SELECT *
-FROM suppliers
-
-SELECT *
 FROM prescriptions
+
+ 
 
 DELETE FROM prescriptions
 WHERE presID = 'E10006';

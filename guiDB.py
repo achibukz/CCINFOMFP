@@ -148,27 +148,28 @@ def getDeletableIDs(table_name, id_prefix):
         msg.showerror("Error", f"Failed to fetch deletable IDs: {e}")
         return []
 
-def viewTable(table_type):
-    """
-    View details for the selected table type: customers, suppliers, doctors, or sales.
 
-    Args:
-        table_type (str): The type of table to view ('customers', 'suppliers', 'doctors', 'sales').
-    """
+def viewTable(table_type):
     try:
+        # Store the current table type in a global variable
+        currentTableType.set(table_type)
+
         cursor = connection.cursor()
 
         if table_type == "customers":
+            # Fetch customer details
             query = """
                 SELECT customerID, customerLastName, customerFirstName, 
                        CASE WHEN HasDisCard = 1 THEN 'Yes' ELSE 'No' END AS HasDiscountCard
-                FROM customers;
+                FROM customers
+                ORDER BY customerID;
             """
             cursor.execute(query)
             rows = cursor.fetchall()
             columns = ["Customer ID", "Last Name", "First Name", "Has Discount Card"]
 
         elif table_type == "suppliers":
+            # Fetch supplier and medicine details
             query = """
                 SELECT s.supID AS SupplierID, s.supName AS SupplierName,
                        m.medName AS MedicineName, ms.dosage AS Dosage, 
@@ -176,61 +177,47 @@ def viewTable(table_type):
                        ms.priceBought AS PriceBought
                 FROM suppliers s
                 LEFT JOIN medSup ms ON s.supID = ms.supID
-                LEFT JOIN medicines m ON ms.medID = m.medID;
+                LEFT JOIN medicines m ON ms.medID = m.medID
+                ORDER BY s.supID;
             """
             cursor.execute(query)
             rows = cursor.fetchall()
             columns = ["Supplier ID", "Supplier Name", "Medicine Name", "Dosage", "Stock Bought", "Date Bought", "Price Bought"]
 
         elif table_type == "doctors":
+            # Fetch doctor details
             query = """
                 SELECT docID, doctorLastName, doctorFirstName
-                FROM doctors;
+                FROM doctors
+                ORDER BY docID;
             """
             cursor.execute(query)
             rows = cursor.fetchall()
             columns = ["Doctor ID", "Last Name", "First Name"]
 
-        elif table_type == "sales":
-            # Query for sales
-            query = """
-                SELECT s.salesID, s.salesDate, s.quantitySold, s.totalPrice, 
-                       m.medName AS MedicineName, 
-                       CONCAT(c.customerLastName, ', ', c.customerFirstName) AS CustomerName,
-                       CASE WHEN s.presID IS NULL THEN 'OTC' ELSE s.presID END AS Prescription,
-                       s.mOP AS ModeOfPayment,
-                       CASE WHEN s.discount > 0 THEN CONCAT(s.discount * 100, '%') ELSE 'No' END AS Discount
-                FROM sales s
-                JOIN medicines m ON s.medID = m.medID
-                JOIN customers c ON s.customerID = c.customerID;
-            """
-            cursor.execute(query)
-            rows = cursor.fetchall()
-            columns = ["Sale ID", "Sale Date", "Quantity Sold", "Total Price", "Medicine Name", "Customer Name", "Prescription/OTC", "Mode of Payment", "Discount"]
-
         elif table_type == "prescriptions":
             # Fetch prescription details
             query = """
-                SELECT 
-                    p.presID AS PrescriptionID,
-                    CONCAT(c.customerLastName, ', ', c.customerFirstName) AS CustomerName,
-                    m.medName AS MedicineName, 
-                    ms.dosage AS Dosage,
-                    CONCAT(d.doctorLastName, ', ', d.doctorFirstName) AS DoctorName
+                SELECT p.presID, 
+                       CONCAT(c.customerLastName, ', ', c.customerFirstName) AS CustomerName,
+                       m.medName, ms.dosage, 
+                       CONCAT(d.doctorLastName, ', ', d.doctorFirstName) AS DoctorName
                 FROM prescriptions p
                 JOIN customers c ON p.customerID = c.customerID
                 JOIN medicines m ON p.medID = m.medID
-                JOIN medSup ms ON ms.medID = m.medID
-                JOIN doctors d ON p.docID = d.docID;
+                JOIN medSup ms ON m.medID = ms.medID
+                JOIN doctors d ON p.docID = d.docID
+                ORDER BY p.presID;
             """
             cursor.execute(query)
             rows = cursor.fetchall()
             columns = ["Prescription ID", "Customer Name", "Medicine Name", "Dosage", "Doctor Name"]
-        
+
         else:
             msg.showerror("Error", "Invalid table type.")
             return
 
+        # Populate Treeview with the latest data
         viewTree.delete(*viewTree.get_children())  # Clear existing data
         viewTree["columns"] = columns
         viewTree["show"] = "headings"
@@ -242,12 +229,13 @@ def viewTable(table_type):
         for row in rows:
             viewTree.insert("", tk.END, values=row)
 
-        # Set frame title dynamically
+        # Update the title dynamically based on the table type
         viewTitleLabel.config(text=f"Viewing {table_type.capitalize()} Table")
         showFrame(viewTableF)
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch {table_type} data: {e}")
+
 
 def generateMonthlyReport(report_type, year=None, month=None):
     """
@@ -2033,18 +2021,27 @@ tk.Button(mainMenuF, text="Monthly Report", font=("Arial", 14), command=navGener
 tk.Button(mainMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
 #==================View Table====================#
+currentTableType = tk.StringVar()  # To store the current table type being viewed
+
+
+# View Table Frame
 viewTableF = tk.Frame(root, width=1280, height=720)
 
-# Title Label
-viewTitleLabel = tk.Label(viewTableF, text="View Table", font=("Arial", 24))
+# Title
+viewTitleLabel = tk.Label(viewTableF, text="Viewing Table", font=("Arial", 24))
 viewTitleLabel.pack(pady=20)
 
-# Treeview
-viewTree = ttk.Treeview(viewTableF, height=25)
+# Treeview for displaying data
+viewTree = ttk.Treeview(viewTableF, height=20)
 viewTree.pack(padx=20, pady=20, fill="both", expand=True)
 
+# Refresh Button
+tk.Button(viewTableF, text="Refresh Data", font=("Arial", 14), 
+          command=lambda: viewTable(currentTableType.get())).pack(pady=10)
+
 # Back Button
-tk.Button(viewTableF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+tk.Button(viewTableF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
 
 # ================= Med Menu Frame =================
 medTitleLabel = tk.Label(medMenuF, text="", font=("Arial", 24))

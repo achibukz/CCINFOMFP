@@ -266,21 +266,21 @@ def getSuppliersNON():
         msg.showerror("Error", f"Failed to fetch suppliers: {e}")
         return []
 
-
 def getMedName():
     try:
         cursor = connection.cursor()
         query = """
-            SELECT m.medName, s.dosage
+            SELECT m.medID, m.medName, ms.dosage, ms.supID, s.supName
             FROM medicines m
-            JOIN medSup s ON m.medID = s.medID;
+            JOIN medSup ms ON m.medID = ms.medID
+            JOIN suppliers s ON ms.supID = s.supID;
         """
         cursor.execute(query)
-        medData = cursor.fetchall()
-        medicine_dropdown_values = [f"{row[0]} - {row[1]}" for row in medData]  
-        medicineIDDropdown["values"] = medicine_dropdown_values  
+        medicines = [f"{row[0]} - {row[1]} - {row[2]} - {row[3]} - {row[4]}" for row in cursor.fetchall()]
+        medicineIDVar.set("")  # Reset dropdown
+        medicineIDDropdown["values"] = medicines  # Populate dropdown
     except sql.Error as e:
-        msg.showerror("Error", f"Failed to fetch medicine names and dosages: {e}")
+        msg.showerror("Error", f"Failed to fetch medicines: {e}")
 
 def getDeletableMed():
     try:
@@ -405,14 +405,14 @@ def addNewMedicine():
         supID = supplier.split(" - ")[0]
 
         try:
-            dosage_value = int(dosage)
+            dosage_value = float(dosage)
             if dosage_value <= 0:
-                msg.showerror("Error", "Dosage must be a positive integer.")
+                msg.showerror("Error", "Dosage must be a positive float.")
                 check = 0
                 return
             dosage = f"{dosage_value}mg"
         except ValueError:
-            msg.showerror("Error", "Dosage must be a valid integer.")
+            msg.showerror("Error", "Dosage must be a valid float.")
             check = 0
             return
 
@@ -479,6 +479,16 @@ def addNewMedicine():
             connection.commit()
             msg.showinfo("Success", f"New medicine added with ID: {next_medID}")
 
+            # Clear inputs after successful insertion
+            nameInput.delete(0, tk.END)
+            medTypeVar.set("OTC")
+            priceInput.delete(0, tk.END)
+            supplierVarMed.set("")
+            dosageInput.delete(0, tk.END)
+            expiryInput.delete(0, tk.END)
+            inStockInput.delete(0, tk.END)
+            priceBoughtInput.delete(0, tk.END)
+
     except sql.Error as e:
         msg.showerror("Error", f"Failed to add new medicine: {e}")
     except Exception as e:
@@ -487,11 +497,12 @@ def addNewMedicine():
 def updateMedicine():
     try:
         selected_medicine = medicineIDVar.get()
-        if not selected_medicine:
-            msg.showerror("Error", "Please select a medicine.")
+        if not selected_medicine or " - " not in selected_medicine:
+            msg.showerror("Error", "Please select a valid medicine.")
             return
-        
-        medicine_name = selected_medicine.split(" - ")[0]
+
+        # Extracting values from the new dropdown format
+        medID, medName, dosage, supID, supName = selected_medicine.split(" - ")
 
         new_name = newNameInput.get().strip()
         new_med_type = newMedTypeVar.get().strip()
@@ -499,6 +510,33 @@ def updateMedicine():
         new_dosage = newDosageInput.get().strip()
         new_stock = newStockInput.get().strip()
 
+        # Ensure updated medicine does not duplicate an existing record
+        try:
+            cursor = connection.cursor()
+
+            if new_name and new_name != "NA" and new_dosage and new_dosage != "NA":
+                new_dosage_value = f"{float(new_dosage)}mg"
+                duplicate_check_query = """
+                    SELECT COUNT(*)
+                    FROM medicines m
+                    JOIN medSup ms ON m.medID = ms.medID
+                    WHERE m.medName = %s AND ms.dosage = %s AND ms.supID = %s AND m.medID != %s;
+                """
+                cursor.execute(duplicate_check_query, (new_name, new_dosage_value, supID, medID))
+                exists = cursor.fetchone()[0]
+
+                if exists:
+                    msg.showerror(
+                        "Error",
+                        f"A medicine with the name '{new_name}', dosage '{new_dosage_value}', and supplier '{supName}' already exists."
+                    )
+                    return
+
+        except ValueError:
+            msg.showerror("Error", "Dosage must be a valid number.")
+            return
+
+        # Prepare updates for the medicines table
         update_queries = []
         update_values = []
 
@@ -524,25 +562,25 @@ def updateMedicine():
                 return
 
         if update_queries:
-            update_query = f"UPDATE medicines SET {', '.join(update_queries)} WHERE medName = %s;"
-            update_values.append(medicine_name)
-            cursor = connection.cursor()
+            update_query = f"UPDATE medicines SET {', '.join(update_queries)} WHERE medID = %s;"
+            update_values.append(medID)
             cursor.execute(update_query, tuple(update_values))
 
+        # Prepare updates for the medSup table
         medsup_updates = []
         medsup_values = []
 
         if new_dosage and new_dosage != "NA":
             try:
-                new_dosage = int(new_dosage)
+                new_dosage = float(new_dosage)
                 if new_dosage <= 0:
-                    msg.showerror("Error", "Dosage must be a positive integer.")
+                    msg.showerror("Error", "Dosage must be a positive float.")
                     return
                 new_dosage = f"{new_dosage}mg"
                 medsup_updates.append("dosage = %s")
                 medsup_values.append(new_dosage)
             except ValueError:
-                msg.showerror("Error", "Dosage must be a valid integer.")
+                msg.showerror("Error", "Dosage must be a valid float.")
                 return
         if new_stock and new_stock != "NA":
             try:
@@ -557,18 +595,19 @@ def updateMedicine():
                 return
 
         if medsup_updates:
-            medsup_query = f"UPDATE medSup SET {', '.join(medsup_updates)} WHERE medID = (SELECT medID FROM medicines WHERE medName = %s);"
-            medsup_values.append(medicine_name)
+            medsup_query = f"UPDATE medSup SET {', '.join(medsup_updates)} WHERE medID = %s AND supID = %s;"
+            medsup_values.extend([medID, supID])
             cursor.execute(medsup_query, tuple(medsup_values))
 
         # Commit the transaction
         connection.commit()
-        msg.showinfo("Success", f"Medicine '{medicine_name}' updated successfully.")
+        msg.showinfo("Success", f"Medicine '{medID} - {medName} - {dosage} - {supID} - {supName}' updated successfully.")
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to update medicine: {e}")
     except Exception as e:
         msg.showerror("Error", f"Unexpected error occurred: {e}")
+
 
 def deleteMedicine():
     selected_medicine = deletableMedicineVar.get()
@@ -1637,7 +1676,7 @@ medicineIDDropdown = ttk.Combobox(updateMedicineF, textvariable=medicineIDVar, s
 medicineIDDropdown.grid(row=1, column=1, sticky="w", padx=10, pady=5)
 
 # Medicine Name
-tk.Label(updateMedicineF, text="New Name:", font=("Arial", 14)).grid(row=2, column=0, sticky="e", padx=10, pady=5)
+tk.Label(updateMedicineF, text="New Name (or NA):", font=("Arial", 14)).grid(row=2, column=0, sticky="e", padx=10, pady=5)
 newNameInput = tk.Entry(updateMedicineF, font=("Arial", 14), width=40)
 newNameInput.grid(row=2, column=1, sticky="w", padx=10, pady=5)
 
@@ -1648,17 +1687,17 @@ newMedTypeDropdown = ttk.Combobox(updateMedicineF, textvariable=newMedTypeVar, v
 newMedTypeDropdown.grid(row=3, column=1, sticky="w", padx=10, pady=5)
 
 # Price
-tk.Label(updateMedicineF, text="New Price (2 decimals):", font=("Arial", 14)).grid(row=4, column=0, sticky="e", padx=10, pady=5)
+tk.Label(updateMedicineF, text="New Price (2 decimals) (or NA):", font=("Arial", 14)).grid(row=4, column=0, sticky="e", padx=10, pady=5)
 newPriceInput = tk.Entry(updateMedicineF, font=("Arial", 14), width=40)
 newPriceInput.grid(row=4, column=1, sticky="w", padx=10, pady=5)
 
 # Dosage
-tk.Label(updateMedicineF, text="New Dosage (number only):", font=("Arial", 14)).grid(row=5, column=0, sticky="e", padx=10, pady=5)
+tk.Label(updateMedicineF, text="New Dosage (number only) (or NA):", font=("Arial", 14)).grid(row=5, column=0, sticky="e", padx=10, pady=5)
 newDosageInput = tk.Entry(updateMedicineF, font=("Arial", 14), width=40)
 newDosageInput.grid(row=5, column=1, sticky="w", padx=10, pady=5)
 
 # Stock
-tk.Label(updateMedicineF, text="New Stock Quantity:", font=("Arial", 14)).grid(row=6, column=0, sticky="e", padx=10, pady=5)
+tk.Label(updateMedicineF, text="New Stock Quantity (or NA):", font=("Arial", 14)).grid(row=6, column=0, sticky="e", padx=10, pady=5)
 newStockInput = tk.Entry(updateMedicineF, font=("Arial", 14), width=40)
 newStockInput.grid(row=6, column=1, sticky="w", padx=10, pady=5) 
 

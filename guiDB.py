@@ -1725,23 +1725,38 @@ def navCompleteSale():
         cursor = connection.cursor()
         cursor.execute("SELECT HasDisCard FROM customers WHERE customerID = %s", (customerID,))
         has_discount = cursor.fetchone()[0]
-        discount = 0.1 if has_discount else 0
+        discount = 0.2 if has_discount else 0
+
+        # Get Prescription ID (presID)
+        cursor.execute(
+            "SELECT presID FROM prescriptions WHERE customerID = %s AND medID = %s",
+            (customerID, medID)
+        )
+        pres_result = cursor.fetchone()
+        presID = pres_result[0] if pres_result else None
 
         # Calculate Total Price
-        price_per_unit = float(selected_medicine.split(" - ")[-2])  # Assuming price is included in the dropdown
-        total_price = price_per_unit * quantity
-        discounted_price = total_price * (1 - discount)
+        cursor.execute("SELECT price FROM medicines WHERE medID = %s", (medID,))
+        price_result = cursor.fetchone()
+        if not price_result:
+            msg.showerror("Error", "Medicine price not found in the database.")
+            return
 
-        # Insert into Sales
+        price_per_unit = float(price_result[0])
+        total_price = price_per_unit * quantity
+        discounted_price = round(total_price * (1 - discount), 2)  # Ensure it's rounded to 2 decimal places
+
+        # Generate new salesID
         cursor.execute("SELECT MAX(salesID) FROM sales;")
         result = cursor.fetchone()
         new_salesID = f"S{(int(result[0][1:]) + 1) if result[0] else 1:04d}"
 
+        # Insert into Sales
         sale_query = """
-            INSERT INTO sales (salesID, salesDate, quantitySold, totalPrice, medID, customerID, mOP, discount)
-            VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, %s);
+            INSERT INTO sales (salesID, salesDate, quantitySold, totalPrice, medID, customerID, presID, mOP, discount)
+            VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, %s, %s);
         """
-        cursor.execute(sale_query, (new_salesID, quantity, discounted_price, medID, customerID, mOP, discount))
+        cursor.execute(sale_query, (new_salesID, quantity, discounted_price, medID, customerID, presID, mOP, discount))
 
         # Update Stock
         stock_update_query = """
@@ -1752,6 +1767,11 @@ def navCompleteSale():
 
         connection.commit()
         msg.showinfo("Success", f"Sale completed successfully with ID: {new_salesID}")
+        
+        global arrF
+        sales_frames = [selectCustomerF, selectOTCMedicineF, selectPrescriptionMedicineF, confirmSaleF]
+        arrF = [frame for frame in arrF if frame not in sales_frames]
+        
         showFrame(selectCustomerF)  # Navigate back to the customer selection frame
     except sql.Error as e:
         msg.showerror("Error", f"Failed to complete the sale: {e}")

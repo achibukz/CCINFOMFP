@@ -14,7 +14,7 @@ def showFrame(nextF):
     # REMEMBER TO ADD NEW FRAMES TO THIS LIST
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
              , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF, inventoryReportF, createCustomerF, createDoctorF, createSupplierF
-             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF, viewTableF]
+             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF, viewTableF, deletePrescriptionF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -148,10 +148,10 @@ def getDeletableIDs(table_name, id_prefix):
 
 def viewTable(table_type):
     """
-    View details for the selected table type: customers, suppliers, or doctors.
+    View details for the selected table type: customers, suppliers, doctors, or prescriptions.
 
     Args:
-        table_type (str): The type of table to view ('customers', 'suppliers', 'doctors').
+        table_type (str): The type of table to view ('customers', 'suppliers', 'doctors', 'prescriptions').
     """
     try:
         cursor = connection.cursor()
@@ -192,6 +192,25 @@ def viewTable(table_type):
             rows = cursor.fetchall()
             columns = ["Doctor ID", "Last Name", "First Name"]
 
+        elif table_type == "prescriptions":
+            # Fetch prescription details
+            query = """
+                SELECT 
+                    p.presId AS PrescriptionID,
+                    CONCAT(c.customerLastName, ', ', c.customerFirstName) AS CustomerName,
+                    m.medName AS MedicineName, 
+                    ms.dosage AS Dosage,
+                    CONCAT(d.doctorLastName, ', ', d.doctorFirstName) AS DoctorName
+                FROM prescriptions p
+                JOIN customers c ON p.customerID = c.customerID
+                JOIN medicines m ON p.medID = m.medID
+                JOIN medSup ms ON p.medID = ms.medID
+                JOIN doctors d ON p.docID = d.docID;
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            columns = ["Prescription ID", "Customer Name", "Medicine Name", "Dosage", "Doctor Name"]
+
         else:
             msg.showerror("Error", "Invalid table type.")
             return
@@ -214,6 +233,7 @@ def viewTable(table_type):
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch {table_type} data: {e}")
+
 
 
 #----------------------------------------- MEDICINE FUNCTIONS -----------------------------------------#
@@ -607,7 +627,6 @@ def updateMedicine():
         msg.showerror("Error", f"Failed to update medicine: {e}")
     except Exception as e:
         msg.showerror("Error", f"Unexpected error occurred: {e}")
-
 
 def deleteMedicine():
     selected_medicine = deletableMedicineVar.get()
@@ -1377,6 +1396,16 @@ def navUpdatePrescription():
 
     showFrame(updatePrescriptionF)
 
+def navDeletePresc():
+    if connection is None:
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+    getDeletablePrescriptions()  # Populate the dropdown with deletable prescriptions
+    showFrame(deletePrescriptionF)  # Navigate to the Delete Prescription frame
+
+def navViewPrescriptions():
+    viewTable("prescriptions")
+
 def getPrescriptionsForUpdate(var):
     try:
         cursor = connection.cursor()
@@ -1394,6 +1423,28 @@ def getPrescriptionsForUpdate(var):
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch prescriptions: {e}")
         return []
+
+def getDeletablePrescriptions():
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT p.presID, CONCAT(c.customerLastName, ', ', c.customerFirstName) AS customerName
+            FROM prescriptions p
+            JOIN customers c ON p.customerID = c.customerID;
+        """
+        cursor.execute(query)
+        prescriptions = cursor.fetchall()
+
+        deletable_prescriptions = []
+        for presID, customerName in prescriptions:
+            if not checkIDExists(presID):  # Only include prescriptions not referenced elsewhere
+                deletable_prescriptions.append(f"{presID} - {customerName}")
+
+        deletablePrescriptionVar.set("")  # Reset dropdown
+        deletablePrescriptionDropdown["values"] = deletable_prescriptions  # Populate dropdown
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch deletable prescriptions: {e}")
 
 def addNewPrescription():
     customer_selection = customerVar.get()
@@ -1497,6 +1548,37 @@ def updatePrescription():
     except Exception as e:
         msg.showerror("Error", f"Unexpected error: {e}")
 
+def deletePrescription():
+    try:
+        selected_prescription = deletablePrescriptionVar.get()
+        if not selected_prescription or " - " not in selected_prescription:
+            msg.showerror("Error", "Please select a valid prescription to delete.")
+            return
+
+        presID, customerName = selected_prescription.split(" - ")
+
+        # Check if the prescription exists in any other tables
+        if checkIDExists(presID):
+            msg.showerror(
+                "Error",
+                f"Prescription ID '{presID}' exists in related tables. Deletion not allowed."
+            )
+            return
+
+        cursor = connection.cursor()
+        delete_query = "DELETE FROM prescriptions WHERE presID = %s;"
+        cursor.execute(delete_query, (presID,))
+        connection.commit()
+
+        msg.showinfo("Success", f"Prescription ID '{presID}' deleted successfully.")
+
+        # Refresh the deletable prescription dropdown
+        getDeletablePrescriptions()
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to delete prescription: {e}")
+    except Exception as e:
+        msg.showerror("Error", f"Unexpected error: {e}")
 
 
 #----------------------------------------- SALE FUNCTIONS -----------------------------------------#
@@ -1994,6 +2076,8 @@ presMenuTitle.pack(pady=20)
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
 tk.Button(presMenuF, text="Add New Prescription", font=("Arial", 14), command=navAddPrescription).pack(pady=10)
 tk.Button(presMenuF, text="Update Prescription", font=("Arial", 14), command=navUpdatePrescription).pack(pady=10)
+tk.Button(presMenuF, text="Delete Prescription", font=("Arial", 14), command=navDeletePresc).pack(pady=10)
+tk.Button(presMenuF, text="View All Prescriptions", font=("Arial", 14), command=navViewPrescriptions).pack(pady=10)
 
 tk.Button(presMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -2060,6 +2144,33 @@ tk.Button(updatePrescriptionF, text="Back", font=("Arial", 14), command=goBack).
 # Configure the grid to adjust properly
 updatePrescriptionF.columnconfigure(0, weight=1)
 updatePrescriptionF.columnconfigure(1, weight=1)
+
+#----------------------DeletePres----------------------------------#
+# Frame for Delete Prescription
+deletePrescriptionF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(deletePrescriptionF, text="Delete Prescription", font=("Arial", 24)).pack(pady=20)
+
+# Dropdown for selecting deletable prescriptions
+tk.Label(deletePrescriptionF, text="Select Prescription (ID - Customer Name):", font=("Arial", 14)).pack(pady=10)
+deletablePrescriptionVar = tk.StringVar()
+deletablePrescriptionDropdown = ttk.Combobox(
+    deletePrescriptionF,
+    textvariable=deletablePrescriptionVar,
+    state="readonly",
+    font=("Arial", 14),
+    width=50
+)
+deletablePrescriptionDropdown.pack(pady=5)
+
+# Buttons
+tk.Button(deletePrescriptionF, text="Delete Prescription", font=("Arial", 14), command=deletePrescription).pack(pady=20)
+tk.Button(deletePrescriptionF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+# Configure the grid layout to adjust properly
+deletePrescriptionF.columnconfigure(0, weight=1)
+deletePrescriptionF.columnconfigure(1, weight=1)
 
 
 #----------------------SaleMenu----------------------------------#

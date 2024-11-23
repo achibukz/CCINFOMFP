@@ -148,7 +148,6 @@ def getDeletableIDs(table_name, id_prefix):
         msg.showerror("Error", f"Failed to fetch deletable IDs: {e}")
         return []
 
-
 def viewTable(table_type):
     try:
         # Store the current table type in a global variable
@@ -252,17 +251,7 @@ def viewTable(table_type):
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch {table_type} data: {e}")
 
-
-
 def generateMonthlyReport(report_type, year=None, month=None):
-    """
-    Generate a monthly report based on the given type, year, and month.
-
-    Args:
-        report_type (str): The type of report to generate ('sales', 'suppliers', 'prescriptions', 'medicines').
-        year (int, optional): The year for the report (not needed for inventory reports).
-        month (int, optional): The month for the report (not needed for inventory reports).
-    """
     try:
         cursor = connection.cursor()
 
@@ -365,16 +354,11 @@ def generateMonthlyReport(report_type, year=None, month=None):
         msg.showerror("Error", f"Failed to fetch {report_type} data: {e}")
 
 def navGenerateMonthlyReport():
-    """
-    Navigate to the monthly report generation frame.
-    """
     if connection is None:
         msg.showerror("Error", "Please connect to the database first.")
         return
 
     showFrame(generateReportF)  
-
-
 
 #----------------------------------------- MEDICINE FUNCTIONS -----------------------------------------#
 def navAddMed():
@@ -936,7 +920,6 @@ def displayInventoryReport():
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to generate inventory report: {e}")
-
 
 #----------------------------------------- CUSTOMER FUNCTIONS -----------------------------------------#
 
@@ -1771,9 +1754,6 @@ def getPrescMedsForCustomer(customerID, variable):
 
 #----------------------------------------- SALE FUNCTIONS -----------------------------------------#
 def navAddNewSale():
-    """
-    Navigate to the frame to select an existing customer for a new sale.
-    """
     if connection is None:
         msg.showerror("Error", "Please connect to the database first.")
         return
@@ -1783,9 +1763,6 @@ def navAddNewSale():
     showFrame(selectCustomerF)
 
 def navAddSalesOTC():
-    """
-    Navigate to the frame to select OTC medicines for a new sale.
-    """
     if not customerVar.get():
         msg.showerror("Error", "Please select a customer before proceeding.")
         return
@@ -1794,9 +1771,6 @@ def navAddSalesOTC():
     showFrame(selectOTCMedicineF)
 
 def navAddSalesPrescription():
-    """
-    Navigate to the frame to select prescription medicines for a new sale.
-    """
     if not customerVar.get():
         msg.showerror("Error", "Please select a customer before proceeding.")
         return
@@ -1926,12 +1900,6 @@ def navViewAllSales():
     viewTable("sales")  # Use the universal viewTable function
 
 def getDeletableSales(variable):
-    """
-    Fetch all sales IDs and populate the variable for dropdown.
-
-    Args:
-        variable (tk.StringVar): The variable for the dropdown menu.
-    """
     try:
         cursor = connection.cursor()
         query = """
@@ -1979,7 +1947,6 @@ def deleteSales():
         msg.showerror("Error", f"Failed to delete sale: {e}")
     except Exception as e:
         msg.showerror("Error", f"Unexpected error occurred: {e}")
-
 
 #---------------------------GUI-------------------------------------------#
 # Main Application

@@ -1514,7 +1514,7 @@ def deleteSupplier():
 
 #----------------------------------------- PRESCRIPTION FUNCTIONS -----------------------------------------#
 def navAddPrescription():
-    customerDropdown["values"] = getCustomers(customerVar)
+    customerDropdown["values"] = getCustomers(customerVarPresc)
     doctorDropdown["values"] = getDoctors(doctorVar)
     prescriptionMedDropdown["values"] = getPrescMeds(prescriptionMedVar)
 
@@ -1583,9 +1583,10 @@ def getDeletablePrescriptions():
         msg.showerror("Error", f"Failed to fetch deletable prescriptions: {e}")
 
 def addNewPrescription():
-    customer_selection = customerVar.get()
+    customer_selection = customerVarPresc.get()
     medicine_selection = prescriptionMedVar.get()
     doctor_selection = doctorVar.get()
+
 
     if not all([customer_selection, medicine_selection, doctor_selection]):
         msg.showerror("Error", "All fields must be selected.")
@@ -2482,8 +2483,8 @@ tk.Label(addPrescriptionF, text="Add New Prescription", font=("Arial", 24)).pack
 
 # Dropdown for Customer Selection
 tk.Label(addPrescriptionF, text="Select Customer:", font=("Arial", 14)).pack(pady=5)
-customerVar = tk.StringVar()
-customerDropdown = ttk.Combobox(addPrescriptionF, textvariable=customerVar, state="readonly", font=("Arial", 14), width=50)
+customerVarPresc = tk.StringVar()
+customerDropdown = ttk.Combobox(addPrescriptionF, textvariable=customerVarPresc, state="readonly", font=("Arial", 14), width=50)
 customerDropdown.pack(pady=5)
 
 # Dropdown for Prescription Medicine

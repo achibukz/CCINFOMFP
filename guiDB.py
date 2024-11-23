@@ -16,7 +16,7 @@ def showFrame(nextF):
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
              , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF, inventoryReportF, createCustomerF, createDoctorF, createSupplierF
              , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF, viewTableF, deletePrescriptionF
-             , selectCustomerF, selectOTCMedicineF, selectPrescriptionMedicineF, confirmSaleF, deleteSalesF]
+             , selectCustomerF, selectOTCMedicineF, selectPrescriptionMedicineF, confirmSaleF, deleteSalesF, generateReportF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -150,16 +150,15 @@ def getDeletableIDs(table_name, id_prefix):
 
 def viewTable(table_type):
     """
-    View details for the selected table type: customers, suppliers, doctors, or prescriptions.
+    View details for the selected table type: customers, suppliers, doctors, or sales.
 
     Args:
-        table_type (str): The type of table to view ('customers', 'suppliers', 'doctors', 'prescriptions').
+        table_type (str): The type of table to view ('customers', 'suppliers', 'doctors', 'sales').
     """
     try:
         cursor = connection.cursor()
 
         if table_type == "customers":
-            # Fetch customer details
             query = """
                 SELECT customerID, customerLastName, customerFirstName, 
                        CASE WHEN HasDisCard = 1 THEN 'Yes' ELSE 'No' END AS HasDiscountCard
@@ -170,7 +169,6 @@ def viewTable(table_type):
             columns = ["Customer ID", "Last Name", "First Name", "Has Discount Card"]
 
         elif table_type == "suppliers":
-            # Fetch supplier and medicine details
             query = """
                 SELECT s.supID AS SupplierID, s.supName AS SupplierName,
                        m.medName AS MedicineName, ms.dosage AS Dosage, 
@@ -185,7 +183,6 @@ def viewTable(table_type):
             columns = ["Supplier ID", "Supplier Name", "Medicine Name", "Dosage", "Stock Bought", "Date Bought", "Price Bought"]
 
         elif table_type == "doctors":
-            # Fetch doctor details
             query = """
                 SELECT docID, doctorLastName, doctorFirstName
                 FROM doctors;
@@ -194,24 +191,22 @@ def viewTable(table_type):
             rows = cursor.fetchall()
             columns = ["Doctor ID", "Last Name", "First Name"]
 
-        elif table_type == "prescriptions":
-            # Fetch prescription details
+        elif table_type == "sales":
+            # Query for sales
             query = """
-                SELECT 
-                    p.presId AS PrescriptionID,
-                    CONCAT(c.customerLastName, ', ', c.customerFirstName) AS CustomerName,
-                    m.medName AS MedicineName, 
-                    ms.dosage AS Dosage,
-                    CONCAT(d.doctorLastName, ', ', d.doctorFirstName) AS DoctorName
-                FROM prescriptions p
-                JOIN customers c ON p.customerID = c.customerID
-                JOIN medicines m ON p.medID = m.medID
-                JOIN medSup ms ON p.medID = ms.medID
-                JOIN doctors d ON p.docID = d.docID;
+                SELECT s.salesID, s.salesDate, s.quantitySold, s.totalPrice, 
+                       m.medName AS MedicineName, 
+                       CONCAT(c.customerLastName, ', ', c.customerFirstName) AS CustomerName,
+                       CASE WHEN s.presID IS NULL THEN 'OTC' ELSE s.presID END AS Prescription,
+                       s.mOP AS ModeOfPayment,
+                       CASE WHEN s.discount > 0 THEN CONCAT(s.discount * 100, '%') ELSE 'No' END AS Discount
+                FROM sales s
+                JOIN medicines m ON s.medID = m.medID
+                JOIN customers c ON s.customerID = c.customerID;
             """
             cursor.execute(query)
             rows = cursor.fetchall()
-            columns = ["Prescription ID", "Customer Name", "Medicine Name", "Dosage", "Doctor Name"]
+            columns = ["Sale ID", "Sale Date", "Quantity Sold", "Total Price", "Medicine Name", "Customer Name", "Prescription/OTC", "Mode of Payment", "Discount"]
 
         else:
             msg.showerror("Error", "Invalid table type.")
@@ -235,6 +230,128 @@ def viewTable(table_type):
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch {table_type} data: {e}")
+
+def generateMonthlyReport(report_type, year=None, month=None):
+    """
+    Generate a monthly report based on the given type, year, and month.
+
+    Args:
+        report_type (str): The type of report to generate ('sales', 'suppliers', 'prescriptions', 'medicines').
+        year (int, optional): The year for the report (not needed for inventory reports).
+        month (int, optional): The month for the report (not needed for inventory reports).
+    """
+    try:
+        cursor = connection.cursor()
+
+        if report_type == "sales":
+            query = """
+                SELECT sl.salesID, sl.salesDate, md.medName, ms.dosage, 
+                       ct.customerLastName, ct.customerFirstName, 
+                       sl.quantitySold, sl.mOP, sl.totalPrice, sl.discount
+                FROM sales sl
+                JOIN medicines md ON sl.medID = md.medID
+                JOIN medSup ms ON ms.medID = md.medID
+                JOIN customers ct ON sl.customerID = ct.customerID
+                WHERE YEAR(sl.salesDate) = %s AND MONTH(sl.salesDate) = %s
+                ORDER BY sl.salesDate;
+            """
+            params = (year, month)
+            columns = ["Sale ID", "Date", "Medicine Name", "Dosage", "Customer Last Name", "Customer First Name", "Quantity Sold", "Mode of Payment", "Total Price", "Discount"]
+
+        elif report_type == "suppliers":
+            query = """
+                SELECT 
+                    s.supId AS "Supplier ID",
+                    s.supName AS "Supplier Name",
+                    s.contact AS "Contact",
+                    GROUP_CONCAT(m.medname SEPARATOR ', ') AS "Medicines Supplied",
+                    GROUP_CONCAT(ms.datebought SEPARATOR ', ') AS "Date of Purchase"
+                FROM suppliers s
+                JOIN medSup ms ON s.supId = ms.supId
+                JOIN medicines m ON ms.medId = m.medId
+                WHERE YEAR(ms.datebought) = %s AND MONTH(ms.datebought) = %s
+                GROUP BY s.supId, s.supName, s.contact;
+            """
+            params = (year, month)
+            columns = ["Supplier ID", "Supplier Name", "Contact", "Medicines Supplied", "Date of Purchase"]
+
+        elif report_type == "prescriptions":
+            query = """
+                SELECT 
+                    p.presId,
+                    CONCAT(c.customerLastName, ', ', c.customerFirstName) AS CustomerName,
+                    m.medName, 
+                    m.dosage,
+                    CONCAT(d.doctorLastName, ', ', d.doctorFirstName) AS DoctorName
+                FROM prescriptions p
+                JOIN customers c ON p.customerId = c.customerId
+                JOIN medSup ms ON ms.medId = p.medId
+                JOIN doctors d ON p.docId = d.docId
+                WHERE YEAR(p.dateIssued) = %s AND MONTH(p.dateIssued) = %s
+                ORDER BY presId;
+            """
+            params = (year, month)
+            columns = ["Prescription ID", "Customer Name", "Medicine Name", "Dosage", "Doctor Name"]
+
+        elif report_type == "medicines":
+            query = """
+                SELECT 
+                    m.medID, 
+                    m.medName, 
+                    m.medType, 
+                    m.price, 
+                    ms.dosage,
+                    SUM(ms.stockBought) AS TotalStockBought,
+                    GROUP_CONCAT(DISTINCT s.supName SEPARATOR ', ') AS Suppliers
+                FROM medicines m
+                JOIN medSup ms ON m.medID = ms.medID
+                JOIN suppliers s ON ms.supID = s.supID
+                WHERE ms.stockBought > 0
+                GROUP BY m.medID, m.medName, m.medType, m.price, ms.dosage
+                ORDER BY m.medName;
+            """
+            params = ()
+            columns = ["Medicine ID", "Medicine Name", "Type", "Price", "Dosage", "Total Stock", "Suppliers"]
+
+        else:
+            msg.showerror("Error", "Invalid report type.")
+            return
+
+        # Execute the query
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        # Populate Treeview with data
+        viewTree.delete(*viewTree.get_children())  # Clear existing data
+        viewTree["columns"] = columns
+        viewTree["show"] = "headings"
+
+        for col in columns:
+            viewTree.heading(col, text=col)
+            viewTree.column(col, width=200, anchor="center")
+
+        for row in rows:
+            viewTree.insert("", tk.END, values=row)
+
+        # Set frame title dynamically
+        title = f"{report_type.capitalize()} Report: {year}-{month:02d}" if year and month else f"{report_type.capitalize()} Inventory Report"
+        viewTitleLabel.config(text=title)
+        showFrame(viewTableF)
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch {report_type} data: {e}")
+
+def navGenerateMonthlyReport():
+    """
+    Navigate to the monthly report generation frame.
+    """
+    if connection is None:
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+
+    showFrame(generateReportF)  
+
+
 
 #----------------------------------------- MEDICINE FUNCTIONS -----------------------------------------#
 def navAddMed():
@@ -796,6 +913,7 @@ def displayInventoryReport():
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to generate inventory report: {e}")
+
 
 #----------------------------------------- CUSTOMER FUNCTIONS -----------------------------------------#
 
@@ -1779,6 +1897,14 @@ def navDeleteSales():
 
     showFrame(deleteSalesF)
 
+def navViewAllSales():
+    if connection is None:
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+
+    viewTable("sales")  # Use the universal viewTable function
+
+
 def getDeletableSales(variable):
     """
     Fetch all sales IDs and populate the variable for dropdown.
@@ -1887,6 +2013,8 @@ tableDisplay = tk.Listbox(mainMenuF, font=("Arial", 14), width=50, height=15)
 tableDisplay.pack(pady=20)
 
 tk.Button(mainMenuF, text="Select Table", font=("Arial", 14), command=selectTable).pack(pady=10)
+tk.Button(mainMenuF, text="Monthly Report", font=("Arial", 14), command=navGenerateMonthlyReport).pack(pady=10)
+
 tk.Button(mainMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
 #==================View Table====================#
@@ -1908,13 +2036,12 @@ medTitleLabel = tk.Label(medMenuF, text="", font=("Arial", 24))
 medTitleLabel.config(text=f"Table: Medicines")
 medTitleLabel.pack(pady=20)
 
-tk.Button(medMenuF, text="Records", font=("Arial", 14), command=showTableMed).pack(pady=10)
 tk.Button(medMenuF, text="Add New Medicine", font=("Arial", 14), command=navAddMed).pack(pady=10)
 tk.Button(medMenuF, text="Update Medicine", font=("Arial", 14), command=navUpdateMed).pack(pady=10)
 tk.Button(medMenuF, text="Delete Medicine", font=("Arial", 14), command=navDeleteMedicine).pack(pady=10)
+tk.Button(medMenuF, text="View All Medicines", font=("Arial", 14), command=showTableMed).pack(pady=10)
 tk.Button(medMenuF, text="Low Stock Medicines", font=("Arial", 14), command=navLowStock).pack(pady=10)
 tk.Button(medMenuF, text="Expiry Dates", font=("Arial", 14), command=navExpirationDates).pack(pady=10)
-tk.Button(medMenuF, text="Inventory Report", font=("Arial", 14), command=navInventoryReport).pack(pady=10)
 
 tk.Button(medMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -2125,11 +2252,10 @@ cusMenuTitle = tk.Label(cusMenuF, text="", font=("Arial", 24))
 cusMenuTitle.config(text=f"Table: Customers")
 cusMenuTitle.pack(pady=20)
 
-tk.Button(cusMenuF, text="Show Table", font=("Arial", 14), command=showTableCus).pack(pady=10)
 tk.Button(cusMenuF, text="Add New Customer", font=("Arial", 14), command=navCreateCustomer).pack(pady=10)
 tk.Button(cusMenuF, text="Update Customer", font=("Arial", 14), command=navupdateCustomer).pack(pady=10)
 tk.Button(cusMenuF, text="Delete Customer", font=("Arial", 14), command=navDeleteCustomer).pack(pady=10)
-tk.Button(cusMenuF, text="View All Customers", font=("Arial", 14), command=navViewCustomers).pack(pady=10)
+tk.Button(cusMenuF, text="View All Customers", font=("Arial", 14), command=showTableCus).pack(pady=10)
 
 tk.Button(cusMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -2431,7 +2557,7 @@ saleMenuTitle.pack(pady=20)
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
 tk.Button(saleMenuF, text="Add New Sale", font=("Arial", 14), command=navAddNewSale).pack(pady=10)
 tk.Button(saleMenuF, text="Delete Sales", font=("Arial", 14), command=navDeleteSales).pack(pady=10)
-
+tk.Button(saleMenuF, text="View All Sales", font=("Arial", 14), command=navViewAllSales).pack(pady=10)
 
 
 tk.Button(saleMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
@@ -2588,6 +2714,44 @@ supplierDeleteDropdown.pack(pady=5)
 # Buttons
 tk.Button(deleteSupplierF, text="Delete Supplier", font=("Arial", 14), command=lambda: deleteSupplier()).pack(pady=20)
 tk.Button(deleteSupplierF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+#--------------------GENERATE REPORTS--------------------------#
+# Frame for generating monthly reports
+generateReportF = tk.Frame(root, width=1280, height=720)
+
+# Title
+tk.Label(generateReportF, text="Generate Monthly Report", font=("Arial", 24)).pack(pady=20)
+
+# Report Type Dropdown
+tk.Label(generateReportF, text="Report Type:", font=("Arial", 14)).pack(pady=10)
+reportTypeVar = tk.StringVar()
+reportTypeDropdown = ttk.Combobox(generateReportF, textvariable=reportTypeVar, font=("Arial", 14), width=30, state="readonly")
+reportTypeDropdown["values"] = ["sales", "suppliers", "prescriptions", "medicines"]
+reportTypeDropdown.pack(pady=10)
+
+# Year Entry
+tk.Label(generateReportF, text="Year:", font=("Arial", 14)).pack(pady=10)
+yearVar = tk.StringVar()
+yearEntry = tk.Entry(generateReportF, textvariable=yearVar, font=("Arial", 14), width=10)
+yearEntry.pack(pady=10)
+
+# Month Entry
+tk.Label(generateReportF, text="Month:", font=("Arial", 14)).pack(pady=10)
+monthVar = tk.StringVar()
+monthEntry = tk.Entry(generateReportF, textvariable=monthVar, font=("Arial", 14), width=10)
+monthEntry.pack(pady=10)
+
+# Generate Button
+tk.Button(generateReportF, text="Generate Report", font=("Arial", 14), command=lambda: generateMonthlyReport(reportTypeVar.get(), int(yearVar.get()), int(monthVar.get()))).pack(pady=20)
+
+# Back Button
+tk.Button(generateReportF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+
+
+
+
+
 #-------------------------------------------------------------#
 arrF.append(loginF)
 showFrame(loginF)

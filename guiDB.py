@@ -1290,26 +1290,12 @@ def addNewPrescription():
 
     customerID = customer_selection.split(" - ")[0]
     medicine = medicine_selection.split(" - ")
-    medName, dosage = medicine[0], medicine[1]
+    medID = medicine[0]
     docID = doctor_selection.split(" - ")[0]
+
 
     try:
         cursor = connection.cursor()
-
-        query_medID = """
-            SELECT m.medID 
-            FROM medicines AS m
-            JOIN medSup AS ms ON m.medID = ms.medID
-            WHERE m.medName = %s AND ms.dosage = %s;
-        """
-        cursor.execute(query_medID, (medName, dosage))
-        medID = cursor.fetchone()
-        if not medID:
-            msg.showerror("Error", "Selected medicine does not exist in the database.")
-            return
-        medID = medID[0]
-
-        print(customerID, medID, docID)
 
         cursor.execute("SELECT MAX(presID) FROM prescriptions;")
         result = cursor.fetchone()

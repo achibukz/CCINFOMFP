@@ -213,6 +213,22 @@ def viewTable(table_type):
             rows = cursor.fetchall()
             columns = ["Prescription ID", "Customer Name", "Medicine Name", "Dosage", "Doctor Name"]
 
+        elif table_type == "sales":
+            # Fetch sales details
+            query = """
+                SELECT sl.salesID, sl.salesDate, md.medName, ms.dosage, 
+                       CONCAT(ct.customerLastName, ', ', ct.customerFirstName) AS CustomerName, 
+                       sl.quantitySold, sl.mOP AS ModeOfPayment, sl.totalPrice, sl.discount
+                FROM sales sl
+                JOIN medicines md ON sl.medID = md.medID
+                JOIN medSup ms ON md.medID = ms.medID
+                JOIN customers ct ON sl.customerID = ct.customerID
+                ORDER BY sl.salesID;
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            columns = ["Sales ID", "Sales Date", "Medicine Name", "Dosage", "Customer Name", "Quantity Sold", "Mode of Payment", "Total Price", "Discount"]
+
         else:
             msg.showerror("Error", "Invalid table type.")
             return
@@ -235,6 +251,7 @@ def viewTable(table_type):
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch {table_type} data: {e}")
+
 
 
 def generateMonthlyReport(report_type, year=None, month=None):

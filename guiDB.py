@@ -2427,18 +2427,6 @@ doctorDeleteDropdown.pack(pady=5)
 tk.Button(deleteDoctorF, text="Delete Doctor", font=("Arial", 14), command=lambda: deleteDoctor()).pack(pady=20)
 tk.Button(deleteDoctorF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
 
-
-
-
-
-
-
-
-
-
-
-
-
 #----------------------PresMenu----------------------------------#
 
 presMenuTitle = tk.Label(presMenuF, text="", font=("Arial", 24))
@@ -2452,8 +2440,6 @@ tk.Button(presMenuF, text="Delete Prescription", font=("Arial", 14), command=nav
 tk.Button(presMenuF, text="View All Prescriptions", font=("Arial", 14), command=navViewPrescriptions).pack(pady=10)
 
 tk.Button(presMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
-
-
 
 #----------------------addPres----------------------------------#
 # Frame for Adding New Prescription
@@ -2564,8 +2550,6 @@ quantityVar = tk.StringVar()
 customerVar = tk.StringVar()
 mOPVar = tk.StringVar()
 
-
-
 #----------------------GUI Frames----------------------------------#
 # Frame for selecting a customer
 selectCustomerF = tk.Frame(root, width=1280, height=720)
@@ -2627,11 +2611,6 @@ salesDropdown.pack(pady=10)
 # Buttons
 tk.Button(deleteSalesF, text="Delete Sale", font=("Arial", 14), command=deleteSales).pack(pady=10)
 tk.Button(deleteSalesF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
-
-
-
-
-
 
 #----------------------SupMenu----------------------------------#
 
@@ -2742,12 +2721,6 @@ tk.Button(generateReportF, text="Generate Report", font=("Arial", 14), command=l
 
 # Back Button
 tk.Button(generateReportF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
-
-
-
-
-
-
 #-------------------------------------------------------------#
 arrF.append(loginF)
 showFrame(loginF)

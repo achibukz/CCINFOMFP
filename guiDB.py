@@ -1289,28 +1289,35 @@ def addNewPrescription():
         return
 
     customerID = customer_selection.split(" - ")[0]
-    medicine = medicine_selection.split(" - ")
-    medID = medicine[0]
+    medID = medicine_selection.split(" - ")[0]
     docID = doctor_selection.split(" - ")[0]
-
 
     try:
         cursor = connection.cursor()
+
+        check_query = """
+            SELECT COUNT(*) 
+            FROM prescriptions 
+            WHERE customerID = %s AND medID = %s AND docID = %s;
+        """
+        cursor.execute(check_query, (customerID, medID, docID))
+        exists = cursor.fetchone()[0]
+
+        if exists:
+            msg.showerror("Error", "A prescription with the same details already exists.")
+            return
 
         cursor.execute("SELECT MAX(presID) FROM prescriptions;")
         result = cursor.fetchone()
         numPresID = letterKeyRemover(result[0]) + 1 if result[0] else 1
         new_presID = f"E{numPresID:04d}"
 
-        print("CHECK1")
         query_insert = """
             INSERT INTO prescriptions (presID, customerID, medID, docID)
             VALUES (%s, %s, %s, %s);
         """
         cursor.execute(query_insert, (new_presID, customerID, medID, docID))
         connection.commit()
-        print("CHECK2")
-
 
         msg.showinfo("Success", f"Prescription added successfully with ID: {new_presID}")
     except sql.Error as e:

@@ -3,6 +3,7 @@ from tkinter import ttk
 from tkinter import messagebox as msg
 import mysql.connector as sql
 from datetime import date
+from decimal import Decimal
 
 connection = None
 onTable = None
@@ -14,7 +15,8 @@ def showFrame(nextF):
     # REMEMBER TO ADD NEW FRAMES TO THIS LIST
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
              , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF, inventoryReportF, createCustomerF, createDoctorF, createSupplierF
-             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF, viewTableF, deletePrescriptionF]
+             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF, viewTableF, deletePrescriptionF
+             , selectCustomerF, selectOTCMedicineF, selectPrescriptionMedicineF, confirmSaleF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -233,8 +235,6 @@ def viewTable(table_type):
 
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch {table_type} data: {e}")
-
-
 
 #----------------------------------------- MEDICINE FUNCTIONS -----------------------------------------#
 def navAddMed():
@@ -1580,6 +1580,184 @@ def deletePrescription():
     except Exception as e:
         msg.showerror("Error", f"Unexpected error: {e}")
 
+def getCustomersForSales(variable):
+    try:
+        cursor = connection.cursor()
+        query = "SELECT customerID, customerLastName, customerFirstName FROM customers;"
+        cursor.execute(query)
+        customers = [f"{row[0]} - {row[1]}, {row[2]}" for row in cursor.fetchall()]
+        variable.set("")  # Reset dropdown
+        return customers
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch customers: {e}")
+        return []
+
+def getOTCMeds(variable):
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT m.medID, m.medName, ms.dosage, ms.supID, m.price, ms.stockBought
+            FROM medicines m
+            JOIN medSup ms ON m.medID = ms.medID
+            WHERE m.medType = 'OTC' AND ms.stockBought > 0;
+        """
+        cursor.execute(query)
+        otc_meds = [f"{row[0]} - {row[1]} - {row[2]} - {row[3]} - {row[4]} - {row[5]} pcs" for row in cursor.fetchall()]
+        variable.set("")  # Reset dropdown
+        return otc_meds
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch OTC medicines: {e}")
+        return []
+
+def getPrescMedsForCustomer(customerID, variable):
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT m.medID, m.medName, ms.dosage, ms.supID, m.price, ms.stockBought
+            FROM prescriptions p
+            JOIN medicines m ON p.medID = m.medID
+            JOIN medSup ms ON m.medID = ms.medID
+            WHERE p.customerID = %s AND ms.stockBought > 0;
+        """
+        cursor.execute(query, (customerID,))
+        presc_meds = [f"{row[0]} - {row[1]} - {row[2]} - {row[3]} - {row[4]} - {row[5]} pcs" for row in cursor.fetchall()]
+        variable.set("")  # Reset dropdown
+        return presc_meds
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch prescription medicines: {e}")
+        return []
+
+
+#----------------------navAddNewSale----------------------------------#
+def navAddNewSale():
+    """
+    Navigate to the frame to select an existing customer for a new sale.
+    """
+    if connection is None:
+        msg.showerror("Error", "Please connect to the database first.")
+        return
+
+    # Populate customer dropdown
+    customerDropdownSale["values"] = getCustomersForSales(customerVar)
+    showFrame(selectCustomerF)
+
+#----------------------navAddSalesOTC----------------------------------#
+def navAddSalesOTC():
+    """
+    Navigate to the frame to select OTC medicines for a new sale.
+    """
+    if not customerVar.get():
+        msg.showerror("Error", "Please select a customer before proceeding.")
+        return
+
+    otcMedDropdown["values"] = getOTCMeds(selectedMedVar)
+    showFrame(selectOTCMedicineF)
+
+#----------------------navAddSalesPrescription----------------------------------#
+def navAddSalesPrescription():
+    """
+    Navigate to the frame to select prescription medicines for a new sale.
+    """
+    if not customerVar.get():
+        msg.showerror("Error", "Please select a customer before proceeding.")
+        return
+
+    customerID = customerVar.get().split(" - ")[0]
+    prescriptionMedDropdown["values"] = getPrescMedsForCustomer(customerID, selectedMedVar)
+    if not prescriptionMedDropdown["values"]:
+        msg.showerror("Error", "No prescription medicines available for the selected customer.")
+        return
+
+    showFrame(selectPrescriptionMedicineF)
+
+#----------------------navConfirmQuantity----------------------------------#
+def navConfirmQuantity():
+    """
+    Navigate to the frame to confirm the quantity of the selected medicine.
+    """
+    selected_medicine = selectedMedVar.get()
+    print(selected_medicine)
+    quantity = quantityVar.get()
+
+    if not selected_medicine or not quantity:
+        msg.showerror("Error", "Please select a medicine and enter a valid quantity.")
+        return
+
+    try:
+        medID = selected_medicine.split(" - ")[0]
+        stock = int(selected_medicine.split(" - ")[-1].split(" pcs")[0])
+        price = float(selected_medicine.split(" - ")[-2])  # Assuming price is included in the dropdown
+
+        quantity = int(quantity)
+        if quantity <= 0:
+            msg.showerror("Error", "Quantity must be a positive integer.")
+            return
+        if quantity > stock:
+            msg.showerror("Error", "Requested quantity exceeds stock availability.")
+            return
+
+        # Save details for confirmation
+        selectedMedVar.set(f"{medID} - {quantity} pcs - {price}")
+        totalPriceLabel.config(text=f"Total Price: {price * quantity:.2f}")
+
+        showFrame(confirmSaleF)
+    except Exception as e:
+        msg.showerror("Error", f"Invalid input: {e}")
+
+#----------------------navCompleteSale----------------------------------#
+def navCompleteSale():
+    """
+    Complete the sale and update the database.
+    """
+    try:
+        selected_medicine = selectedMedVar.get()
+        quantity = int(quantityVar.get())
+        customerID = customerVar.get().split(" - ")[0]
+        medID = selected_medicine.split(" - ")[0]
+        mOP = mOPVar.get()
+
+        # Validate Mode of Payment
+        if not mOP:
+            msg.showerror("Error", "Please select a Mode of Payment.")
+            return
+
+        # Check for Discount
+        cursor = connection.cursor()
+        cursor.execute("SELECT HasDisCard FROM customers WHERE customerID = %s", (customerID,))
+        has_discount = cursor.fetchone()[0]
+        discount = 0.1 if has_discount else 0
+
+        # Calculate Total Price
+        price_per_unit = float(selected_medicine.split(" - ")[-2])  # Assuming price is included in the dropdown
+        total_price = price_per_unit * quantity
+        discounted_price = total_price * (1 - discount)
+
+        # Insert into Sales
+        cursor.execute("SELECT MAX(salesID) FROM sales;")
+        result = cursor.fetchone()
+        new_salesID = f"S{(int(result[0][1:]) + 1) if result[0] else 1:04d}"
+
+        sale_query = """
+            INSERT INTO sales (salesID, salesDate, quantitySold, totalPrice, medID, customerID, mOP, discount)
+            VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, %s);
+        """
+        cursor.execute(sale_query, (new_salesID, quantity, discounted_price, medID, customerID, mOP, discount))
+
+        # Update Stock
+        stock_update_query = """
+            UPDATE medSup SET stockBought = stockBought - %s
+            WHERE medID = %s AND stockBought >= %s LIMIT 1;
+        """
+        cursor.execute(stock_update_query, (quantity, medID, quantity))
+
+        connection.commit()
+        msg.showinfo("Success", f"Sale completed successfully with ID: {new_salesID}")
+        showFrame(selectCustomerF)  # Navigate back to the customer selection frame
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to complete the sale: {e}")
+    except Exception as e:
+        msg.showerror("Error", f"Unexpected error occurred: {e}")
+
 
 #----------------------------------------- SALE FUNCTIONS -----------------------------------------#
 
@@ -1650,8 +1828,6 @@ viewTree.pack(padx=20, pady=20, fill="both", expand=True)
 
 # Back Button
 tk.Button(viewTableF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
-
-
 
 # ================= Med Menu Frame =================
 medTitleLabel = tk.Label(medMenuF, text="", font=("Arial", 24))
@@ -2174,14 +2350,67 @@ deletePrescriptionF.columnconfigure(1, weight=1)
 
 
 #----------------------SaleMenu----------------------------------#
-
 saleMenuTitle = tk.Label(saleMenuF, text="", font=("Arial", 24))
 saleMenuTitle.config(text=f"Table: Sales")
 saleMenuTitle.pack(pady=20)
 
 #tk.Button(medMenuF, text="Show Table", font=("Arial", 14), command=[EDIT]).pack(pady=10)
+tk.Button(saleMenuF, text="Add New Sale", font=("Arial", 14), command=navAddNewSale).pack(pady=10)
+
 tk.Button(saleMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
+
+selectedMedVar = tk.StringVar()
+quantityVar = tk.StringVar()
+customerVar = tk.StringVar()
+mOPVar = tk.StringVar()
+
+
+
+#----------------------GUI Frames----------------------------------#
+# Frame for selecting a customer
+selectCustomerF = tk.Frame(root, width=1280, height=720)
+tk.Label(selectCustomerF, text="Select Customer", font=("Arial", 24)).pack(pady=20)
+tk.Label(selectCustomerF, text="Customer:", font=("Arial", 14)).pack(pady=10)
+customerDropdownSale = ttk.Combobox(selectCustomerF, textvariable=customerVar, font=("Arial", 14), width=50, state="readonly")
+customerDropdownSale.pack(pady=10)
+tk.Button(selectCustomerF, text="OTC Medicines", font=("Arial", 14), command=navAddSalesOTC).pack(pady=10)
+tk.Button(selectCustomerF, text="Prescription Medicines", font=("Arial", 14), command=navAddSalesPrescription).pack(pady=10)
+tk.Button(selectCustomerF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+# Frame for selecting OTC medicines
+selectOTCMedicineF = tk.Frame(root, width=1280, height=720)
+tk.Label(selectOTCMedicineF, text="Select OTC Medicine", font=("Arial", 24)).pack(pady=20)
+tk.Label(selectOTCMedicineF, text="OTC Medicine:", font=("Arial", 14)).pack(pady=10)
+otcMedDropdown = ttk.Combobox(selectOTCMedicineF, textvariable=selectedMedVar, font=("Arial", 14), width=50, state="readonly")
+otcMedDropdown.pack(pady=10)
+tk.Label(selectOTCMedicineF, text="Quantity:", font=("Arial", 14)).pack(pady=10)
+tk.Entry(selectOTCMedicineF, textvariable=quantityVar, font=("Arial", 14), width=10).pack(pady=10)
+tk.Button(selectOTCMedicineF, text="Next", font=("Arial", 14), command=navConfirmQuantity).pack(pady=10)
+tk.Button(selectOTCMedicineF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+# Frame for selecting prescription medicines
+selectPrescriptionMedicineF = tk.Frame(root, width=1280, height=720)
+tk.Label(selectPrescriptionMedicineF, text="Select Prescription Medicine", font=("Arial", 24)).pack(pady=20)
+tk.Label(selectPrescriptionMedicineF, text="Prescription Medicine:", font=("Arial", 14)).pack(pady=10)
+prescriptionMedDropdown = ttk.Combobox(selectPrescriptionMedicineF, textvariable=selectedMedVar, font=("Arial", 14), width=50, state="readonly")
+prescriptionMedDropdown.pack(pady=10)
+tk.Label(selectPrescriptionMedicineF, text="Quantity:", font=("Arial", 14)).pack(pady=10)
+tk.Entry(selectPrescriptionMedicineF, textvariable=quantityVar, font=("Arial", 14), width=10).pack(pady=10)
+tk.Button(selectPrescriptionMedicineF, text="Next", font=("Arial", 14), command=navConfirmQuantity).pack(pady=10)
+tk.Button(selectPrescriptionMedicineF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
+
+# Frame for confirming the sale
+confirmSaleF = tk.Frame(root, width=1280, height=720)
+tk.Label(confirmSaleF, text="Confirm Sale", font=("Arial", 24)).pack(pady=20)
+totalPriceLabel = tk.Label(confirmSaleF, text="Total Price: 0.00", font=("Arial", 18))
+totalPriceLabel.pack(pady=20)
+tk.Label(confirmSaleF, text="Mode of Payment:", font=("Arial", 14)).pack(pady=10)
+mOPDropdown = ttk.Combobox(confirmSaleF, textvariable=mOPVar, font=("Arial", 14), width=30, state="readonly")
+mOPDropdown["values"] = ["Cash", "E-Wallet", "Card"]
+mOPDropdown.pack(pady=10)
+tk.Button(confirmSaleF, text="Complete Sale", font=("Arial", 14), command=navCompleteSale).pack(pady=10)
+tk.Button(confirmSaleF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
 
 

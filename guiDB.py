@@ -208,6 +208,25 @@ def viewTable(table_type):
             rows = cursor.fetchall()
             columns = ["Sale ID", "Sale Date", "Quantity Sold", "Total Price", "Medicine Name", "Customer Name", "Prescription/OTC", "Mode of Payment", "Discount"]
 
+        elif table_type == "prescriptions":
+            # Fetch prescription details
+            query = """
+                SELECT 
+                    p.presID AS PrescriptionID,
+                    CONCAT(c.customerLastName, ', ', c.customerFirstName) AS CustomerName,
+                    m.medName AS MedicineName, 
+                    ms.dosage AS Dosage,
+                    CONCAT(d.doctorLastName, ', ', d.doctorFirstName) AS DoctorName
+                FROM prescriptions p
+                JOIN customers c ON p.customerID = c.customerID
+                JOIN medicines m ON p.medID = m.medID
+                JOIN medSup ms ON ms.medID = m.medID
+                JOIN doctors d ON p.docID = d.docID;
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            columns = ["Prescription ID", "Customer Name", "Medicine Name", "Dosage", "Doctor Name"]
+        
         else:
             msg.showerror("Error", "Invalid table type.")
             return
@@ -1819,9 +1838,6 @@ def navConfirmQuantity():
         msg.showerror("Error", f"Invalid input: {e}")
 
 def navCompleteSale():
-    """
-    Complete the sale and update the database.
-    """
     try:
         selected_medicine = selectedMedVar.get()
         quantity = int(quantityVar.get())
@@ -1857,7 +1873,7 @@ def navCompleteSale():
 
         cursor.execute("SELECT MAX(salesID) FROM sales;")
         result = cursor.fetchone()
-        new_salesID = f"S{(int(result[0][1:]) + 1) if result[0] else 1:04d}"
+        new_salesID = f"F{(int(result[0][1:]) + 1) if result[0] else 1:04d}"
 
         sale_query = """
             INSERT INTO sales (salesID, salesDate, quantitySold, totalPrice, medID, customerID, presID, mOP, discount)
@@ -1872,7 +1888,7 @@ def navCompleteSale():
         cursor.execute(stock_update_query, (quantity, medID, quantity))
 
         connection.commit()
-        msg.showinfo("Success", f"Sale completed successfully with ID: {new_salesID}")
+        msg.showinfo("Success", f"Sale completed successfully with ID: {new_salesID} with a discounted Price of PHP {discounted_price:.2f}")
         
         global arrF
         sales_frames = [selectCustomerF, selectOTCMedicineF, selectPrescriptionMedicineF, confirmSaleF]
@@ -1903,7 +1919,6 @@ def navViewAllSales():
         return
 
     viewTable("sales")  # Use the universal viewTable function
-
 
 def getDeletableSales(variable):
     """

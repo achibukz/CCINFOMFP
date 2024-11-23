@@ -14,7 +14,7 @@ def showFrame(nextF):
     # REMEMBER TO ADD NEW FRAMES TO THIS LIST
     listF = [loginF, mainMenuF, medMenuF, medTableF, cusMenuF,cusTableF, docMenuF, docTableF, presMenuF, presTableF, saleMenuF, saleTableF, supMenuF, supTableF, addMedicineF
              , updateMedicineF, deleteMedicineF, lowStockF, expirationDatesF, inventoryReportF, createCustomerF, createDoctorF, createSupplierF
-             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF]
+             , updateCustomerF, updateSupplierF, updateDoctorF, deleteCustomerF, deleteDoctorF, deleteSupplierF, addPrescriptionF, updatePrescriptionF, viewTableF]
 
     if not arrF or nextF != arrF[-1]:
         arrF.append(nextF)
@@ -145,6 +145,76 @@ def getDeletableIDs(table_name, id_prefix):
     except sql.Error as e:
         msg.showerror("Error", f"Failed to fetch deletable IDs: {e}")
         return []
+
+def viewTable(table_type):
+    """
+    View details for the selected table type: customers, suppliers, or doctors.
+
+    Args:
+        table_type (str): The type of table to view ('customers', 'suppliers', 'doctors').
+    """
+    try:
+        cursor = connection.cursor()
+
+        if table_type == "customers":
+            # Fetch customer details
+            query = """
+                SELECT customerID, customerLastName, customerFirstName, 
+                       CASE WHEN HasDisCard = 1 THEN 'Yes' ELSE 'No' END AS HasDiscountCard
+                FROM customers;
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            columns = ["Customer ID", "Last Name", "First Name", "Has Discount Card"]
+
+        elif table_type == "suppliers":
+            # Fetch supplier and medicine details
+            query = """
+                SELECT s.supID AS SupplierID, s.supName AS SupplierName,
+                       m.medName AS MedicineName, ms.dosage AS Dosage, 
+                       ms.stockBought AS StockBought, ms.dateBought AS DateBought, 
+                       ms.priceBought AS PriceBought
+                FROM suppliers s
+                LEFT JOIN medSup ms ON s.supID = ms.supID
+                LEFT JOIN medicines m ON ms.medID = m.medID;
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            columns = ["Supplier ID", "Supplier Name", "Medicine Name", "Dosage", "Stock Bought", "Date Bought", "Price Bought"]
+
+        elif table_type == "doctors":
+            # Fetch doctor details
+            query = """
+                SELECT docID, doctorLastName, doctorFirstName
+                FROM doctors;
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            columns = ["Doctor ID", "Last Name", "First Name"]
+
+        else:
+            msg.showerror("Error", "Invalid table type.")
+            return
+
+        # Populate Treeview with data
+        viewTree.delete(*viewTree.get_children())  # Clear existing data
+        viewTree["columns"] = columns
+        viewTree["show"] = "headings"
+
+        for col in columns:
+            viewTree.heading(col, text=col)
+            viewTree.column(col, width=200, anchor="center")
+
+        for row in rows:
+            viewTree.insert("", tk.END, values=row)
+
+        # Set frame title dynamically
+        viewTitleLabel.config(text=f"Viewing {table_type.capitalize()} Table")
+        showFrame(viewTableF)
+
+    except sql.Error as e:
+        msg.showerror("Error", f"Failed to fetch {table_type} data: {e}")
+
 
 #----------------------------------------- MEDICINE FUNCTIONS -----------------------------------------#
 def navAddMed():
@@ -749,6 +819,9 @@ def navupdateCustomer():
 def navCreateCustomer():
     showFrame(createCustomerF)
 
+def navViewCustomers():
+    viewTable("customers")
+
 def createCustomer():
     try:
         last_name = customerLastNameInput.get().strip()
@@ -891,8 +964,6 @@ def deleteCustomer():
     except sql.Error as e:
         msg.showerror("Error", f"Failed to delete customer: {e}")
 
-
-
 #----------------------------------------- DOCTOR FUNCTIONS -----------------------------------------#
 def navCreateDoctor():
     showFrame(createDoctorF)
@@ -907,6 +978,9 @@ def navUpdateDoctor():
 def navDeleteDoctor():
     getDeletableDoctors()
     showFrame(deleteDoctorF)
+
+def navViewDoctors():
+    viewTable("doctors")
 
 def getDoctorsNON():
     try:
@@ -1078,6 +1152,9 @@ def navUpdateSupplier():
 def navDeleteSupplier():
     getDeletableSuppliers()
     showFrame(deleteSupplierF)
+
+def navViewSupplier():
+    viewTable("suppliers")
 
 def getSuppliers():
     try:
@@ -1439,6 +1516,22 @@ tableDisplay.pack(pady=20)
 tk.Button(mainMenuF, text="Select Table", font=("Arial", 14), command=selectTable).pack(pady=10)
 tk.Button(mainMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
+#==================View Table====================#
+viewTableF = tk.Frame(root, width=1280, height=720)
+
+# Title Label
+viewTitleLabel = tk.Label(viewTableF, text="View Table", font=("Arial", 24))
+viewTitleLabel.pack(pady=20)
+
+# Treeview
+viewTree = ttk.Treeview(viewTableF, height=25)
+viewTree.pack(padx=20, pady=20, fill="both", expand=True)
+
+# Back Button
+tk.Button(viewTableF, text="Back", font=("Arial", 14), command=goBack).pack(pady=10)
+
+
+
 # ================= Med Menu Frame =================
 medTitleLabel = tk.Label(medMenuF, text="", font=("Arial", 24))
 medTitleLabel.config(text=f"Table: Medicines")
@@ -1665,7 +1758,7 @@ tk.Button(cusMenuF, text="Show Table", font=("Arial", 14), command=showTableCus)
 tk.Button(cusMenuF, text="Add New Customer", font=("Arial", 14), command=navCreateCustomer).pack(pady=10)
 tk.Button(cusMenuF, text="Update Customer", font=("Arial", 14), command=navupdateCustomer).pack(pady=10)
 tk.Button(cusMenuF, text="Delete Customer", font=("Arial", 14), command=navDeleteCustomer).pack(pady=10)
-
+tk.Button(cusMenuF, text="View All Customers", font=("Arial", 14), command=navViewCustomers).pack(pady=10)
 
 tk.Button(cusMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -1773,6 +1866,7 @@ docMenuTitle.pack(pady=20)
 tk.Button(docMenuF, text="Add New Doctor", font=("Arial", 14), command=navCreateDoctor).pack(pady=10)
 tk.Button(docMenuF, text="Update Doctor", font=("Arial", 14), command=navUpdateDoctor).pack(pady=10)
 tk.Button(docMenuF, text="Delete Doctor", font=("Arial", 14), command=navDeleteDoctor).pack(pady=10)
+tk.Button(docMenuF, text="View All Doctors", font=("Arial", 14), command=navViewDoctors).pack(pady=10)
 
 tk.Button(docMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 
@@ -1965,6 +2059,7 @@ supMenuTitle.pack(pady=20)
 tk.Button(supMenuF, text="Add New Supplier", font=("Arial", 14), command=navCreateSupplier).pack(pady=10)
 tk.Button(supMenuF, text="Update Supplier", font=("Arial", 14), command=navUpdateSupplier).pack(pady=10)
 tk.Button(supMenuF, text="Delete Supplier", font=("Arial", 14), command=navDeleteSupplier).pack(pady=10)
+tk.Button(supMenuF, text="View All Suppliers", font=("Arial", 14), command=navViewSupplier).pack(pady=10)
 
 tk.Button(supMenuF, text="Back", font=("Arial", 14), command=goBack).pack(pady=20)
 

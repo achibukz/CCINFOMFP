@@ -231,7 +231,6 @@ def viewTable(table_type):
             msg.showerror("Error", "Invalid table type.")
             return
 
-        # Populate Treeview with data
         viewTree.delete(*viewTree.get_children())  # Clear existing data
         viewTree["columns"] = columns
         viewTree["show"] = "headings"
@@ -1797,8 +1796,8 @@ def navAddSalesPrescription():
         return
 
     customerID = customerVar.get().split(" - ")[0]
-    prescriptionMedDropdown["values"] = getPrescMedsForCustomer(customerID, selectedMedVar)
-    if not prescriptionMedDropdown["values"]:
+    prescriptionMedDropdownCus["values"] = getPrescMedsForCustomer(customerID, selectedMedVar)
+    if not prescriptionMedDropdownCus["values"]:
         msg.showerror("Error", "No prescription medicines available for the selected customer.")
         return
 
@@ -2611,8 +2610,8 @@ tk.Button(selectOTCMedicineF, text="Back", font=("Arial", 14), command=goBack).p
 selectPrescriptionMedicineF = tk.Frame(root, width=1280, height=720)
 tk.Label(selectPrescriptionMedicineF, text="Select Prescription Medicine", font=("Arial", 24)).pack(pady=20)
 tk.Label(selectPrescriptionMedicineF, text="Prescription Medicine:", font=("Arial", 14)).pack(pady=10)
-prescriptionMedDropdown = ttk.Combobox(selectPrescriptionMedicineF, textvariable=selectedMedVar, font=("Arial", 14), width=50, state="readonly")
-prescriptionMedDropdown.pack(pady=10)
+prescriptionMedDropdownCus = ttk.Combobox(selectPrescriptionMedicineF, textvariable=selectedMedVar, font=("Arial", 14), width=50, state="readonly")
+prescriptionMedDropdownCus.pack(pady=10)
 tk.Label(selectPrescriptionMedicineF, text="Quantity:", font=("Arial", 14)).pack(pady=10)
 tk.Entry(selectPrescriptionMedicineF, textvariable=quantityVar, font=("Arial", 14), width=10).pack(pady=10)
 tk.Button(selectPrescriptionMedicineF, text="Next", font=("Arial", 14), command=navConfirmQuantity).pack(pady=10)
